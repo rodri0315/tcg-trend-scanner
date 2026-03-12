@@ -1,0 +1,2 @@
+-- Initial placeholder migration
+-- Create cards, tcgplayer_daily, ebay_daily, and signals_daily tables here.
