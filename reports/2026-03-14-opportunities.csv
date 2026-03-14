@@ -1,0 +1,4 @@
+name,set,number,variant,tags,ebay_floor,ebay_floor_change_7d_pct,ebay_floor_change_30d_pct,inventory_change_7d_pct,inventory_change_30d_pct,auction_price_vs_floor_pct,auction_activity_change_7d_pct,volatility_7d_pct,total_bin_count,auction_count,trend_score,local_lag_score,spike_flag
+Gengar VMAX,Fusion Strike,271,Alt Art,alt-art|modern,,,,,,,,,0,0,7.20,0.00,false
+Giratina V,Lost Origin,186,Alt Art,alt-art|modern,,,,,,,,,0,0,7.20,0.00,false
+Umbreon VMAX,Evolving Skies,215,Alt Art,alt-art|modern,,,,,,,,,0,0,7.20,0.00,false

@@ -1,0 +1,29 @@
+[
+  {
+    "card_name": "Gengar VMAX",
+    "floor_bin": 425.0,
+    "floor_bin_count": 2,
+    "total_bin_count": 24,
+    "auction_count": 13,
+    "median_auction_bid_count": 11,
+    "median_auction_current_price": 401.0
+  },
+  {
+    "card_name": "Giratina V",
+    "floor_bin": 296.0,
+    "floor_bin_count": 1,
+    "total_bin_count": 37,
+    "auction_count": 19,
+    "median_auction_bid_count": 8,
+    "median_auction_current_price": 287.0
+  },
+  {
+    "card_name": "Umbreon VMAX",
+    "floor_bin": 965.0,
+    "floor_bin_count": 1,
+    "total_bin_count": 16,
+    "auction_count": 10,
+    "median_auction_bid_count": 14,
+    "median_auction_current_price": 934.0
+  }
+]

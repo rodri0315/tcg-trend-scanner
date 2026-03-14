@@ -12,8 +12,8 @@ Recommended approach:
 This usually produces better results than asking Codex to invent the whole project from scratch.
 
 ## MVP scope
-- English Pokemon singles only
-- TCGplayer US
+- Pokemon and One Piece singles
+- English and Japanese tracked separately
 - eBay US
 - Daily snapshots
 - Internal-only tool
@@ -60,10 +60,9 @@ Once the data pipeline is stable, a dashboard is easy to add.
 ## Good first Codex tasks
 - create database migrations
 - create seed import script
-- build TCGplayer client
 - build eBay client
 - compute daily signal metrics
 - generate a daily CSV and Markdown report
 
 ## Suggested first Codex prompt
-Scaffold the MVP for the internal Pokemon TCG Trend Scanner described in AGENTS.md. Build the Postgres schema, seed import, daily TCGplayer fetcher, daily eBay fetcher, signal calculation, and a CSV/Markdown report.
+Scaffold the MVP for the internal Pokemon TCG Trend Scanner described in AGENTS.md. Build the Postgres schema, seed import, daily eBay fetcher, signal calculation, and a CSV/Markdown report.

@@ -1,11 +1,45 @@
-import 'dotenv/config';
+import { pool } from '../db/pool';
+import { generateDailyReport } from '../reports/dailyReport';
+import { fetchEbaySnapshots } from '../services/ebay';
+import { loadEbaySnapshotsFromFixture } from '../services/ebayFixture';
+import { getCards } from '../services/cards';
+import { upsertEbaySnapshots, upsertSignals } from '../services/snapshots';
+import { calculateDailySignals } from '../signals/calculateDailySignals';
+import { parseDailyCliArgs } from '../utils/cli';
 
 async function main() {
-  console.log('Daily job placeholder');
-  console.log('Implement TCGplayer fetch -> eBay fetch -> signal calculation -> report generation');
+  const { snapshotDate, offline, fixturePath } = parseDailyCliArgs(process.argv.slice(2));
+  const cards = await getCards();
+
+  if (cards.length === 0) {
+    throw new Error('No cards found. Run the seed import before the daily job.');
+  }
+
+  console.log(`Running daily scan for ${cards.length} cards on ${snapshotDate}${offline ? ' [offline]' : ''}`);
+
+  const ebaySnapshots = offline
+    ? loadEbaySnapshotsFromFixture(cards, snapshotDate, fixturePath)
+    : await fetchEbaySnapshots(cards, snapshotDate);
+  await upsertEbaySnapshots(ebaySnapshots);
+  console.log(`Stored ${ebaySnapshots.length} eBay snapshots`);
+  if (offline) {
+    console.log(`Loaded fixture data from ${fixturePath}`);
+  }
+
+  const signals = await calculateDailySignals(cards, snapshotDate);
+  await upsertSignals(signals);
+  console.log(`Stored ${signals.length} daily signals`);
+
+  const report = await generateDailyReport(snapshotDate);
+  console.log(`Report written to ${report.csvPath}`);
+  console.log(`Report written to ${report.markdownPath}`);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await pool.end();
+  });

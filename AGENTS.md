@@ -1,14 +1,13 @@
 # AGENTS.md
 
 ## Project
-Build an internal-only Pokemon TCG price trend and arbitrage scanner.
+Build an internal-only TCG price trend and arbitrage scanner.
 
 ## Market scope
-- English Pokemon cards only
+- Pokemon and One Piece cards
+- Track English and Japanese separately
 - Singles only
-- Use TCGplayer US pricing
 - Use eBay US marketplace only
-- Ignore Japanese and all other languages for MVP
 - Ignore sealed product for MVP
 
 ## Goal
@@ -28,18 +27,16 @@ The software should surface signals, history, and ranked opportunities.
 It should not make blind buy decisions.
 
 ## Data sources
-### TCGplayer
-Use official pricing endpoints for daily baseline market data:
-- market price
-- low, mid, high
-- optional condition-specific prices later
-
 ### eBay
 Use eBay Browse API search for active market microstructure:
 - Buy It Now listings
 - auctions
 - inventory depth
 - floor price including shipping
+
+### Optional later sources
+- manual reference prices
+- approved/licensed pricing partners
 
 ## MVP constraints
 - Daily scans only
@@ -53,7 +50,7 @@ Store daily historical snapshots so the system can compute:
 - 7d / 30d changes
 - trend slopes
 - inventory squeeze
-- spread between TCGplayer and eBay floor
+- eBay floor vs recent auction behavior
 - volatility
 - spike vs sustained movement
 
@@ -72,17 +69,8 @@ Store daily historical snapshots so the system can compute:
 - card_number
 - rarity
 - variant
-- tcgplayer_product_id
 - ebay_query
 - tags
-
-### tcgplayer_daily
-- card_id
-- date
-- market_price
-- low_price
-- mid_price
-- high_price
 
 ### ebay_daily
 - card_id
@@ -98,12 +86,15 @@ Store daily historical snapshots so the system can compute:
 ### signals_daily
 - card_id
 - date
-- spread_pct
 - ebay_floor_change_7d_pct
-- tcg_market_change_7d_pct
+- ebay_floor_change_30d_pct
 - inventory_change_7d_pct
+- inventory_change_30d_pct
+- auction_price_vs_floor_pct
+- auction_activity_change_7d_pct
+- volatility_7d_pct
 - trend_score
-- local_arbitrage_score
+- local_lag_score
 - spike_flag
 
 ## Opportunity logic
@@ -115,8 +106,8 @@ Look for:
 
 ### Local arbitrage
 Look for:
-- eBay moving faster than TCGplayer
-- widening spread between TCGplayer market and eBay floor
+- eBay floor rising while inventory shrinks
+- auctions trailing current BIN floor
 - patterns that suggest local stores have not updated prices yet
 
 ## eBay query rules
@@ -128,14 +119,16 @@ Look for:
 Example query pattern:
 "Gengar VMAX 271 Fusion Strike -japanese -jp -korean -proxy -custom"
 
+Japanese example query pattern:
+"One Piece Luffy OP05-119 Japanese -english -proxy -custom"
+
 ## Build order
 1. Postgres schema + migrations
 2. Seed cards import
-3. TCGplayer daily fetcher
-4. eBay daily fetcher
-5. Signal calculation
-6. CSV/Markdown report
-7. Simple dashboard later
+3. eBay daily fetcher
+4. Signal calculation
+5. CSV/Markdown report
+6. Simple dashboard later
 
 ## Codex guidance
 - Prefer small, reviewable PR-sized changes
