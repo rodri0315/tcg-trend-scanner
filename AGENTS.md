@@ -6,6 +6,7 @@ Build an internal-only TCG price trend and arbitrage scanner.
 ## Market scope
 - Pokemon and One Piece cards
 - Track English and Japanese separately
+- Track raw and graded markets separately when pricing behavior differs
 - Singles only
 - Use eBay US marketplace only
 - Ignore sealed product for MVP
@@ -69,6 +70,7 @@ Store daily historical snapshots so the system can compute:
 - card_number
 - rarity
 - variant
+- market_segment
 - ebay_query
 - tags
 

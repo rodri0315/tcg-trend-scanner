@@ -7,6 +7,7 @@ export async function getCards(): Promise<Card[]> {
     game: string;
     language: string;
     product_type: string;
+    market_segment: string;
     name: string;
     set_name: string;
     card_number: string;
@@ -20,6 +21,7 @@ export async function getCards(): Promise<Card[]> {
       game,
       language,
       product_type,
+      market_segment,
       name,
       set_name,
       card_number,
@@ -36,6 +38,7 @@ export async function getCards(): Promise<Card[]> {
     game: row.game,
     language: row.language,
     productType: row.product_type,
+    marketSegment: row.market_segment,
     name: row.name,
     setName: row.set_name,
     cardNumber: row.card_number,

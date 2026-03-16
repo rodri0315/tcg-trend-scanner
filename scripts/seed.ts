@@ -9,6 +9,7 @@ interface SeedRow {
   game: string;
   language: string;
   product_type?: string;
+  market_segment?: string;
   name: string;
   set: string;
   number: string;
@@ -38,6 +39,7 @@ async function main() {
             game,
             language,
             product_type,
+            market_segment,
             name,
             set_name,
             card_number,
@@ -47,8 +49,8 @@ async function main() {
             tags,
             updated_at
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
-          on conflict (game, language, product_type, name, set_name, card_number, variant) do update set
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+          on conflict (game, language, product_type, market_segment, name, set_name, card_number, variant) do update set
             rarity = excluded.rarity,
             ebay_query = excluded.ebay_query,
             tags = excluded.tags,
@@ -58,6 +60,7 @@ async function main() {
           row.game.trim(),
           row.language.trim(),
           row.product_type?.trim() || 'single',
+          row.market_segment?.trim() || 'raw',
           row.name,
           row.set,
           row.number,

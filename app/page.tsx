@@ -15,9 +15,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const selectedGame = getSingleValue(resolvedSearchParams.game);
   const selectedLanguage = getSingleValue(resolvedSearchParams.language);
+  const selectedMarketSegment = getSingleValue(resolvedSearchParams.marketSegment);
   const filters = {
     game: selectedGame,
     language: selectedLanguage,
+    marketSegment: selectedMarketSegment,
   };
 
   const [summary, opportunities] = await Promise.all([
@@ -39,8 +41,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <FilterBar
           games={summary.filters.games}
           languages={summary.filters.languages}
+          marketSegments={summary.filters.marketSegments}
           selectedGame={selectedGame}
           selectedLanguage={selectedLanguage}
+          selectedMarketSegment={selectedMarketSegment}
         />
       </section>
 
@@ -81,6 +85,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 <div className="pillRow">
                   <span className="pill">{row.game}</span>
                   <span className="pill">{row.language}</span>
+                  <span className="pill">{row.marketSegment}</span>
                   {row.spikeFlag ? <span className="pill pill--hot">spike</span> : null}
                 </div>
                 <h4>

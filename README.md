@@ -41,6 +41,7 @@ If you already applied the earlier pre-pivot schema, also apply [`migrations/002
 ## Seed cards
 Starter seed data lives in [`seed/seed_cards.csv`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/seed/seed_cards.csv).
 Each row is tracked separately by `game`, `language`, and `product_type`.
+Use `market_segment` to split raw vs graded lanes like `raw` and `psa_10`.
 
 Run:
 
@@ -92,7 +93,7 @@ npm run start
 ```
 
 The dashboard includes:
-- overview page with game and language filters
+- overview page with game, language, and market filters
 - watchlist page for tracked cards
 - card detail pages with recent history
 
@@ -123,3 +124,4 @@ https://your-app.example.com/api/ebay/marketplace-account-deletion
 - Local lag scoring is inferred from eBay floor acceleration, inventory tightening, and auctions trailing current BIN floors.
 - Offline mode maps fixture rows by `ebay_query` first, then `card_name`, and defaults missing cards to zero-volume rows.
 - English and Japanese are stored as separate tracked cards so the same character/card can be monitored independently by language.
+- Raw and graded markets should be stored as separate watchlist rows using `market_segment`.

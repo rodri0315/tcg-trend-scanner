@@ -8,6 +8,7 @@ import { toCsv } from '../utils/csv';
 interface ReportRow {
   game: string;
   language: string;
+  market_segment: string;
   name: string;
   set_name: string;
   card_number: string;
@@ -34,6 +35,7 @@ export async function generateDailyReport(snapshotDate: string): Promise<{ csvPa
       select
         c.game,
         c.language,
+        c.market_segment,
         c.name,
         c.set_name,
         c.card_number,
@@ -70,6 +72,7 @@ export async function generateDailyReport(snapshotDate: string): Promise<{ csvPa
     name: row.name,
     game: row.game,
     language: row.language,
+    market_segment: row.market_segment,
     set: row.set_name,
     number: row.card_number,
     variant: row.variant,
@@ -118,7 +121,7 @@ export async function generateDailyReport(snapshotDate: string): Promise<{ csvPa
 
 function formatRow(row: ReportRow): string {
   const parts = [
-    `- [${row.game}/${row.language}] ${row.name} ${row.card_number} (${row.set_name})`,
+    `- [${row.game}/${row.language}/${row.market_segment}] ${row.name} ${row.card_number} (${row.set_name})`,
     `trend=${row.trend_score}`,
     `localLag=${row.local_lag_score}`,
     `ebay=${row.ebay_floor ?? 'n/a'}`,

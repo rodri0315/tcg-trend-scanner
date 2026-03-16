@@ -3,6 +3,7 @@ export interface Card {
   game: string;
   language: string;
   productType: string;
+  marketSegment: string;
   name: string;
   setName: string;
   cardNumber: string;

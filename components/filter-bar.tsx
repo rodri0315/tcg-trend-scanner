@@ -1,11 +1,20 @@
 interface FilterBarProps {
   games: string[];
   languages: string[];
+  marketSegments: string[];
   selectedGame?: string;
   selectedLanguage?: string;
+  selectedMarketSegment?: string;
 }
 
-export function FilterBar({ games, languages, selectedGame, selectedLanguage }: FilterBarProps) {
+export function FilterBar({
+  games,
+  languages,
+  marketSegments,
+  selectedGame,
+  selectedLanguage,
+  selectedMarketSegment,
+}: FilterBarProps) {
   return (
     <form className="filterBar" method="get">
       <label>
@@ -26,6 +35,17 @@ export function FilterBar({ games, languages, selectedGame, selectedLanguage }: 
           {languages.map((language) => (
             <option key={language} value={language}>
               {labelize(language)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>Market</span>
+        <select name="marketSegment" defaultValue={selectedMarketSegment ?? 'all'}>
+          <option value="all">All market lanes</option>
+          {marketSegments.map((marketSegment) => (
+            <option key={marketSegment} value={marketSegment}>
+              {labelize(marketSegment)}
             </option>
           ))}
         </select>

@@ -14,9 +14,11 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const selectedGame = getSingleValue(resolvedSearchParams.game);
   const selectedLanguage = getSingleValue(resolvedSearchParams.language);
+  const selectedMarketSegment = getSingleValue(resolvedSearchParams.marketSegment);
   const filters = {
     game: selectedGame,
     language: selectedLanguage,
+    marketSegment: selectedMarketSegment,
   };
 
   const [summary, cards] = await Promise.all([
@@ -38,8 +40,10 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
         <FilterBar
           games={summary.filters.games}
           languages={summary.filters.languages}
+          marketSegments={summary.filters.marketSegments}
           selectedGame={selectedGame}
           selectedLanguage={selectedLanguage}
+          selectedMarketSegment={selectedMarketSegment}
         />
       </section>
 
@@ -58,6 +62,7 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
                 <th>Card</th>
                 <th>Game</th>
                 <th>Language</th>
+                <th>Market</th>
                 <th>Latest floor</th>
                 <th>Trend</th>
                 <th>Local lag</th>
@@ -77,6 +82,7 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
                   </td>
                   <td>{card.game}</td>
                   <td>{card.language}</td>
+                  <td>{card.marketSegment}</td>
                   <td>{card.floorBin === null ? 'n/a' : `$${card.floorBin.toFixed(2)}`}</td>
                   <td>{card.trendScore === null ? 'n/a' : card.trendScore.toFixed(2)}</td>
                   <td>{card.localLagScore === null ? 'n/a' : card.localLagScore.toFixed(2)}</td>

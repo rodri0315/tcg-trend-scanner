@@ -3,6 +3,7 @@ import { pool } from '../db/pool';
 export interface DashboardFilters {
   game?: string;
   language?: string;
+  marketSegment?: string;
 }
 
 export interface DashboardSummary {
@@ -15,6 +16,7 @@ export interface DashboardSummary {
   filters: {
     games: string[];
     languages: string[];
+    marketSegments: string[];
   };
 }
 
@@ -22,6 +24,7 @@ export interface OpportunityRow {
   id: number;
   game: string;
   language: string;
+  marketSegment: string;
   name: string;
   setName: string;
   cardNumber: string;
@@ -41,6 +44,7 @@ export interface WatchlistCard {
   id: number;
   game: string;
   language: string;
+  marketSegment: string;
   name: string;
   setName: string;
   cardNumber: string;
@@ -68,6 +72,7 @@ export interface CardDetail {
   id: number;
   game: string;
   language: string;
+  marketSegment: string;
   productType: string;
   name: string;
   setName: string;
@@ -146,6 +151,7 @@ export async function getLatestOpportunities(
     id: number;
     game: string;
     language: string;
+    market_segment: string;
     name: string;
     set_name: string;
     card_number: string;
@@ -165,6 +171,7 @@ export async function getLatestOpportunities(
         c.id,
         c.game,
         c.language,
+        c.market_segment,
         c.name,
         c.set_name,
         c.card_number,
@@ -195,6 +202,7 @@ export async function getLatestOpportunities(
     id: row.id,
     game: row.game,
     language: row.language,
+    marketSegment: row.market_segment,
     name: row.name,
     setName: row.set_name,
     cardNumber: row.card_number,
@@ -217,6 +225,7 @@ export async function getWatchlistCards(filters: DashboardFilters): Promise<Watc
     id: number;
     game: string;
     language: string;
+    market_segment: string;
     name: string;
     set_name: string;
     card_number: string;
@@ -233,6 +242,7 @@ export async function getWatchlistCards(filters: DashboardFilters): Promise<Watc
         c.id,
         c.game,
         c.language,
+        c.market_segment,
         c.name,
         c.set_name,
         c.card_number,
@@ -268,6 +278,7 @@ export async function getWatchlistCards(filters: DashboardFilters): Promise<Watc
     id: row.id,
     game: row.game,
     language: row.language,
+    marketSegment: row.market_segment,
     name: row.name,
     setName: row.set_name,
     cardNumber: row.card_number,
@@ -287,6 +298,7 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
     game: string;
     language: string;
     product_type: string;
+    market_segment: string;
     name: string;
     set_name: string;
     card_number: string;
@@ -301,6 +313,7 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
         game,
         language,
         product_type,
+        market_segment,
         name,
         set_name,
         card_number,
@@ -355,6 +368,7 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
     id: row.id,
     game: row.game,
     language: row.language,
+    marketSegment: row.market_segment,
     productType: row.product_type,
     name: row.name,
     setName: row.set_name,
@@ -378,18 +392,19 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
   };
 }
 
-async function getFilterOptions(): Promise<{ games: string[]; languages: string[] }> {
-  const result = await pool.query<{ game: string; language: string }>(
+async function getFilterOptions(): Promise<{ games: string[]; languages: string[]; marketSegments: string[] }> {
+  const result = await pool.query<{ game: string; language: string; market_segment: string }>(
     `
-      select distinct game, language
+      select distinct game, language, market_segment
       from cards
-      order by game asc, language asc
+      order by game asc, language asc, market_segment asc
     `,
   );
 
   return {
     games: [...new Set(result.rows.map((row) => row.game))],
     languages: [...new Set(result.rows.map((row) => row.language))],
+    marketSegments: [...new Set(result.rows.map((row) => row.market_segment))],
   };
 }
 
@@ -423,6 +438,11 @@ function buildCardFilterClause(
   if (filters.language && filters.language !== 'all') {
     params.push(filters.language);
     clauses.push(`c.language = $${startingIndex + params.length - 1}`);
+  }
+
+  if (filters.marketSegment && filters.marketSegment !== 'all') {
+    params.push(filters.marketSegment);
+    clauses.push(`c.market_segment = $${startingIndex + params.length - 1}`);
   }
 
   return {

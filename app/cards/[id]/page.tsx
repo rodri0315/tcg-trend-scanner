@@ -31,7 +31,7 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
       <section className="heroPanel">
         <div>
           <p className="eyebrow">
-            {card.game} · {card.language} · {card.productType}
+            {card.game} · {card.language} · {card.marketSegment} · {card.productType}
           </p>
           <h2>
             {card.name} {card.cardNumber}
