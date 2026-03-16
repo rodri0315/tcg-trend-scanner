@@ -13,9 +13,9 @@ Internal-only TCG trend and arbitrage scanner.
 
 ## Stack
 - Node.js + TypeScript
+- Next.js + React + TypeScript dashboard
 - Postgres
 - CSV/Markdown reports first
-- React/Next dashboard later
 
 ## Implemented MVP
 - Postgres schema for cards, eBay daily snapshots, and signals
@@ -23,6 +23,7 @@ Internal-only TCG trend and arbitrage scanner.
 - Daily eBay Buy It Now and auction snapshot fetcher
 - Signal scoring for trend and local lag opportunities using eBay-only history
 - CSV and Markdown report output
+- Internal read-only dashboard for overview, watchlist review, and card detail history
 
 ## Environment
 Copy `.env.example` to `.env` and fill in:
@@ -30,6 +31,8 @@ Copy `.env.example` to `.env` and fill in:
 - `DATABASE_SSL`
 - `EBAY_CLIENT_ID`
 - `EBAY_CLIENT_SECRET`
+- `EBAY_VERIFICATION_TOKEN`
+- `APP_BASE_URL`
 
 ## Database setup
 Apply [`migrations/001_init.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/001_init.sql) to a fresh database.
@@ -73,6 +76,46 @@ npm run daily -- --offline --fixture=seed/mock_ebay_daily.json
 Outputs are written to the `reports/` directory as:
 - `YYYY-MM-DD-opportunities.csv`
 - `YYYY-MM-DD-opportunities.md`
+
+## Internal dashboard
+Run the dashboard locally:
+
+```bash
+npm run dev
+```
+
+Production build:
+
+```bash
+npm run build
+npm run start
+```
+
+The dashboard includes:
+- overview page with game and language filters
+- watchlist page for tracked cards
+- card detail pages with recent history
+
+## eBay production keyset compliance
+The app includes a minimal Marketplace Account Deletion webhook at:
+
+`/api/ebay/marketplace-account-deletion`
+
+To configure it in the eBay developer portal:
+- set `Delivery Method` to `Web server`
+- use your deployed HTTPS URL plus `/api/ebay/marketplace-account-deletion`
+- set `EBAY_VERIFICATION_TOKEN` to the same token you enter in eBay
+- set `APP_BASE_URL` to the public base URL of the deployed app
+
+How it works:
+- `GET` handles eBay's `challenge_code` verification flow
+- `POST` accepts deletion notifications and logs the payload
+
+Example public endpoint:
+
+```text
+https://your-app.example.com/api/ebay/marketplace-account-deletion
+```
 
 ## Notes
 - eBay snapshots are aggregate-only for MVP and keep raw API payloads for debugging.
