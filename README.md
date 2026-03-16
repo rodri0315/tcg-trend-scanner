@@ -120,6 +120,7 @@ https://your-app.example.com/api/ebay/marketplace-account-deletion
 
 ## Notes
 - eBay snapshots are aggregate-only for MVP and keep raw API payloads for debugging.
+- Snapshot aggregation filters out likely non-card matches by title before computing floors and counts, and keeps rejection diagnostics in `raw_payload`.
 - Signals use 7-day and 30-day eBay lookbacks and degrade gracefully when history is not available yet.
 - Local lag scoring is inferred from eBay floor acceleration, inventory tightening, and auctions trailing current BIN floors.
 - Offline mode maps fixture rows by `ebay_query` first, then `card_name`, and defaults missing cards to zero-volume rows.
