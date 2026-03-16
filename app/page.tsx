@@ -26,6 +26,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     getDashboardSummary(filters),
     getLatestOpportunities(filters, 12),
   ]);
+  const summaryHelp = {
+    latestSignalDate: 'Most recent day the signal pipeline completed for this filter set. If this is stale, the rankings may be stale too.',
+    trackedCards: 'How many cards are currently on the watchlist for the selected filters. This is the size of the review universe.',
+    cardsWithSignals: 'How many tracked cards have a signal row in the latest run. This shows how much of the watchlist is active in the current snapshot.',
+    spikeFlags: 'Count of cards flagged as sudden moves rather than steadier climbs. Useful for spotting hype bursts that may need extra caution.',
+    averageTrendScore: 'Average momentum score across the latest filtered run. Higher means the watchlist is broadly showing stronger floor, inventory, and auction pressure.',
+    averageLocalLagScore: 'Average estimate of how much slower local channels may be versus eBay. Higher means more names may deserve local arbitrage review.',
+  };
 
   return (
     <DashboardShell>
@@ -49,17 +57,28 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </section>
 
       <section className="metricGrid">
-        <MetricCard label="Latest signal date" value={summary.latestSignalDate ?? 'No runs yet'} tone="accent" />
-        <MetricCard label="Tracked cards" value={String(summary.trackedCards)} />
-        <MetricCard label="Cards with signals" value={String(summary.cardsWithSignals)} />
-        <MetricCard label="Spike flags" value={String(summary.spikeFlags)} tone="warning" />
+        <MetricCard
+          label="Latest signal date"
+          value={summary.latestSignalDate ?? 'No runs yet'}
+          help={summaryHelp.latestSignalDate}
+          tone="accent"
+        />
+        <MetricCard label="Tracked cards" value={String(summary.trackedCards)} help={summaryHelp.trackedCards} />
+        <MetricCard
+          label="Cards with signals"
+          value={String(summary.cardsWithSignals)}
+          help={summaryHelp.cardsWithSignals}
+        />
+        <MetricCard label="Spike flags" value={String(summary.spikeFlags)} help={summaryHelp.spikeFlags} tone="warning" />
         <MetricCard
           label="Average trend score"
           value={summary.averageTrendScore === null ? 'n/a' : summary.averageTrendScore.toFixed(2)}
+          help={summaryHelp.averageTrendScore}
         />
         <MetricCard
           label="Average local lag score"
           value={summary.averageLocalLagScore === null ? 'n/a' : summary.averageLocalLagScore.toFixed(2)}
+          help={summaryHelp.averageLocalLagScore}
         />
       </section>
 

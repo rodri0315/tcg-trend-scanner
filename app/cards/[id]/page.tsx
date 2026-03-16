@@ -25,6 +25,16 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
 
   const floorSeries = card.history.map((point) => point.floorBin);
   const trendSeries = card.history.map((point) => point.trendScore);
+  const headerHelp: Array<{ label: string; help: string }> = [
+    { label: 'Date', help: 'Snapshot day for this card. We use these daily points to compare short-term momentum and inventory changes.' },
+    { label: 'Floor', help: 'Lowest filtered Buy It Now total on eBay, including shipping. This is our quickest read on the live asking floor.' },
+    { label: 'Listings', help: 'Count of filtered Buy It Now listings that still look like the tracked card. Falling supply can support a bullish move.' },
+    { label: 'Auctions', help: 'Count of filtered auction listings for the card. Rising auction volume can signal growing market attention and price discovery.' },
+    { label: 'Median auction', help: 'Median current auction price, including shipping, from the filtered auction set. We compare this against the floor to spot lag or confirmation.' },
+    { label: 'Trend', help: 'Composite momentum score built from floor movement, inventory tightening, and auction activity. Higher usually means stronger near-term trend pressure.' },
+    { label: 'Local lag', help: 'Score estimating whether local shops may be behind the online market. Higher values suggest eBay is firming faster than slower channels may react.' },
+    { label: 'Spike', help: 'Flags a sharp move that looks more like a sudden burst than a steady climb. Useful for separating hype pops from sustained trends.' },
+  ];
 
   return (
     <DashboardShell>
@@ -90,14 +100,19 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
           <table className="dataTable">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Floor</th>
-                <th>Listings</th>
-                <th>Auctions</th>
-                <th>Median auction</th>
-                <th>Trend</th>
-                <th>Local lag</th>
-                <th>Spike</th>
+                {headerHelp.map((column) => (
+                  <th key={column.label}>
+                    <span className="tableHeaderLabel">{column.label}</span>
+                    <span
+                      className="infoHint"
+                      tabIndex={0}
+                      aria-label={`${column.label}: ${column.help}`}
+                      data-tooltip={column.help}
+                    >
+                      ?
+                    </span>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>

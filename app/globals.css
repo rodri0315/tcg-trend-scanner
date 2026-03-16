@@ -172,6 +172,13 @@ a {
   margin: 0 0 10px;
   color: var(--muted);
   font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metricLabel {
+  display: inline-block;
 }
 
 .metricCard strong {
@@ -270,6 +277,8 @@ a {
 
 .tableWrap {
   overflow-x: auto;
+  overflow-y: visible;
+  position: relative;
 }
 
 .dataTable {
@@ -290,6 +299,69 @@ a {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+  white-space: nowrap;
+  position: relative;
+  overflow: visible;
+}
+
+.tableHeaderLabel {
+  margin-right: 6px;
+}
+
+.infoHint {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(26, 23, 19, 0.18);
+  background: rgba(255, 251, 244, 0.9);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  outline: none;
+}
+
+.infoHint::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 12px);
+  transform: translateX(-50%);
+  width: min(240px, 42vw);
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(26, 23, 19, 0.94);
+  color: #fff8ee;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  white-space: normal;
+  box-shadow: 0 14px 32px rgba(26, 23, 19, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 10;
+}
+
+.infoHint:hover::after,
+.infoHint:focus::after {
+  opacity: 1;
+}
+
+.infoHint:focus {
+  box-shadow: 0 0 0 3px rgba(215, 100, 66, 0.18);
+}
+
+.dataTable .infoHint::after {
+  top: calc(100% + 12px);
+  bottom: auto;
 }
 
 .tableLink {
@@ -359,5 +431,16 @@ a {
   .panel {
     border-radius: 22px;
     padding: 18px;
+  }
+
+  .infoHint::after {
+    width: min(220px, 70vw);
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+
+  .dataTable .infoHint::after {
+    top: calc(100% + 10px);
   }
 }
