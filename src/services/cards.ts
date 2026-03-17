@@ -1,6 +1,20 @@
 import { pool } from '../db/pool';
 import type { Card } from '../types';
 
+export interface CreateCardInput {
+  game: string;
+  language: string;
+  productType: string;
+  marketSegment: string;
+  name: string;
+  setName: string;
+  cardNumber: string;
+  rarity: string | null;
+  variant: string;
+  ebayQuery: string;
+  tags: string[];
+}
+
 export async function getCards(): Promise<Card[]> {
   const result = await pool.query<{
     id: number;
@@ -47,4 +61,47 @@ export async function getCards(): Promise<Card[]> {
     ebayQuery: row.ebay_query,
     tags: row.tags ?? [],
   }));
+}
+
+export async function createCard(input: CreateCardInput): Promise<number> {
+  const result = await pool.query<{ id: number }>(
+    `
+      insert into cards (
+        game,
+        language,
+        product_type,
+        market_segment,
+        name,
+        set_name,
+        card_number,
+        rarity,
+        variant,
+        ebay_query,
+        tags,
+        updated_at
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+      returning id
+    `,
+    [
+      input.game,
+      input.language,
+      input.productType,
+      input.marketSegment,
+      input.name,
+      input.setName,
+      input.cardNumber,
+      input.rarity,
+      input.variant,
+      input.ebayQuery,
+      input.tags,
+    ],
+  );
+
+  const id = result.rows[0]?.id;
+  if (!id) {
+    throw new Error('Card insert did not return an id.');
+  }
+
+  return id;
 }

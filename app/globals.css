@@ -392,6 +392,105 @@ a {
   justify-items: start;
 }
 
+.cardForm {
+  display: grid;
+  gap: 20px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.formGrid label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.formGrid input,
+.formGrid select,
+.formGrid textarea {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: #fffdf8;
+  padding: 12px 14px;
+  color: var(--ink);
+  font: inherit;
+}
+
+.formGrid textarea {
+  resize: vertical;
+  min-height: 110px;
+}
+
+.formSpan2 {
+  grid-column: span 2;
+}
+
+.variantPresetRow {
+  display: grid;
+  gap: 8px;
+}
+
+.presetButton {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 251, 244, 0.82);
+  padding: 8px 12px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+
+.presetButton--active {
+  background: rgba(215, 100, 66, 0.14);
+  border-color: rgba(215, 100, 66, 0.36);
+}
+
+.queryBuilder {
+  display: grid;
+  gap: 10px;
+}
+
+.queryBuilderHead {
+  display: grid;
+  gap: 10px;
+}
+
+.queryField {
+  display: grid;
+  gap: 6px;
+}
+
+.queryReset {
+  justify-self: start;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink);
+}
+
+.formActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.formActions button {
+  border: 1px solid var(--line);
+  background: rgba(255, 251, 244, 0.9);
+  padding: 12px 16px;
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+
 .heroImageLink {
   display: block;
   width: 180px;
@@ -502,6 +601,14 @@ a {
 
   .debugGrid {
     grid-template-columns: 1fr;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .formSpan2 {
+    grid-column: auto;
   }
 }
 

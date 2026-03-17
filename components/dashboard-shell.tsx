@@ -16,6 +16,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
         <nav className="nav">
           <Link href="/">Overview</Link>
           <Link href="/cards">Watchlist</Link>
+          <Link href="/cards/new">Add Card</Link>
         </nav>
       </header>
       <main className="page">{children}</main>

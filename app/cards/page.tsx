@@ -53,6 +53,9 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
             <p className="eyebrow">Watchlist table</p>
             <h3>{cards.length} tracked cards</h3>
           </div>
+          <Link href="/cards/new" className="textLink">
+            Add new card
+          </Link>
         </div>
 
         <div className="tableWrap">
