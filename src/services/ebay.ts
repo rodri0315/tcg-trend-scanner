@@ -23,6 +23,7 @@ interface EbayItemSummary {
   shippingOptions?: EbayShippingOption[];
   currentBidPrice?: EbayPrice;
   bidCount?: number;
+  itemEndDate?: string;
 }
 
 interface EbaySearchResponse {
@@ -48,11 +49,15 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
     const rawAuctionItems = auctionResponse.itemSummaries ?? [];
     const filteredBin = filterEbayItems(card, rawBinItems);
     const filteredAuction = filterEbayItems(card, rawAuctionItems);
-    const binItems = filteredBin.items;
     const auctionItems = filteredAuction.items;
-    const binTotals = binItems
-      .map((item) => totalListingPrice(item.price?.value, item.shippingOptions))
-      .filter((value): value is number => value !== null);
+    const medianAuctionCurrentPrice = median(
+      auctionItems
+        .map((item) => totalListingPrice(item.currentBidPrice?.value, item.shippingOptions))
+        .filter((value): value is number => value !== null),
+    );
+    const saneBin = filterBinPriceOutliers(card, filteredBin.items, medianAuctionCurrentPrice);
+    const binItems = saneBin.items;
+    const binTotals = saneBin.prices;
     const floorBin = binTotals.length > 0 ? Math.min(...binTotals) : null;
     const floorBinCount = floorBin === null ? 0 : binTotals.filter((price) => price === floorBin).length;
 
@@ -68,11 +73,7 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
           .map((item) => toNumber(item.bidCount))
           .filter((value): value is number => value !== null),
       ),
-      medianAuctionCurrentPrice: median(
-        auctionItems
-          .map((item) => totalListingPrice(item.currentBidPrice?.value, item.shippingOptions))
-          .filter((value): value is number => value !== null),
-      ),
+      medianAuctionCurrentPrice,
       queryUsed: card.ebayQuery,
       rawPayload: {
         filters: {
@@ -80,6 +81,8 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
             total: rawBinItems.length,
             kept: filteredBin.items.length,
             rejected: filteredBin.rejections,
+            priceSanityKept: saneBin.items.length,
+            priceSanityRejected: saneBin.rejections,
           },
           auctions: {
             total: rawAuctionItems.length,
@@ -145,6 +148,53 @@ function totalListingPrice(priceValue: string | undefined, shippingOptions: Ebay
 
   const shipping = toNumber(shippingOptions?.[0]?.shippingCost?.value) ?? 0;
   return round(price + shipping);
+}
+
+function filterBinPriceOutliers(
+  card: Card,
+  items: EbayItemSummary[],
+  medianAuctionCurrentPrice: number | null,
+): { items: EbayItemSummary[]; prices: number[]; rejections: Array<{ title: string; price: number; reason: string }> } {
+  const pricedItems = items
+    .map((item) => ({
+      item,
+      price: totalListingPrice(item.price?.value, item.shippingOptions),
+    }))
+    .filter((entry): entry is { item: EbayItemSummary; price: number } => entry.price !== null)
+    .sort((left, right) => left.price - right.price);
+
+  const rejections: Array<{ title: string; price: number; reason: string }> = [];
+
+  while (pricedItems.length >= 3) {
+    const candidate = pricedItems[0];
+    const next = pricedItems[1];
+    const prices = pricedItems.map((entry) => entry.price);
+    const binMedian = median(prices);
+    const ratioConfig = getPriceSanityRatios(card.marketSegment);
+    const suspiciousVsNext = next !== undefined && candidate.price < round(next.price * ratioConfig.nextListingFloorRatio);
+    const suspiciousVsBinMedian =
+      binMedian !== null && candidate.price < round(binMedian * ratioConfig.binMedianFloorRatio);
+    const suspiciousVsAuctionMedian =
+      medianAuctionCurrentPrice !== null &&
+      candidate.price < round(medianAuctionCurrentPrice * ratioConfig.auctionMedianFloorRatio);
+
+    if (!suspiciousVsNext || (!suspiciousVsBinMedian && !suspiciousVsAuctionMedian)) {
+      break;
+    }
+
+    rejections.push({
+      title: candidate.item.title ?? '(untitled listing)',
+      price: candidate.price,
+      reason: buildPriceSanityReason(candidate.price, next?.price ?? null, binMedian, medianAuctionCurrentPrice),
+    });
+    pricedItems.shift();
+  }
+
+  return {
+    items: pricedItems.map((entry) => entry.item),
+    prices: pricedItems.map((entry) => entry.price),
+    rejections,
+  };
 }
 
 function filterEbayItems(
@@ -231,6 +281,41 @@ function containsPsa10Term(title: string): boolean {
   return /(?:^|\s)psa\s*10(?:\s|$)/.test(title);
 }
 
+function getPriceSanityRatios(marketSegment: string): {
+  nextListingFloorRatio: number;
+  binMedianFloorRatio: number;
+  auctionMedianFloorRatio: number;
+} {
+  if (marketSegment === 'psa_10') {
+    return {
+      nextListingFloorRatio: 0.55,
+      binMedianFloorRatio: 0.45,
+      auctionMedianFloorRatio: 0.45,
+    };
+  }
+
+  return {
+    nextListingFloorRatio: 0.45,
+    binMedianFloorRatio: 0.3,
+    auctionMedianFloorRatio: 0.3,
+  };
+}
+
+function buildPriceSanityReason(
+  price: number,
+  nextPrice: number | null,
+  binMedian: number | null,
+  auctionMedian: number | null,
+): string {
+  const comparisons = [
+    nextPrice === null ? null : `next=${nextPrice.toFixed(2)}`,
+    binMedian === null ? null : `binMedian=${binMedian.toFixed(2)}`,
+    auctionMedian === null ? null : `auctionMedian=${auctionMedian.toFixed(2)}`,
+  ].filter((value): value is string => value !== null);
+
+  return `price_outlier:${price.toFixed(2)} vs ${comparisons.join(', ')}`;
+}
+
 const BLOCKED_ACCESSORY_PATTERNS = [
   /\bkeychain\b/,
   /\bkey ring\b/,
@@ -240,7 +325,10 @@ const BLOCKED_ACCESSORY_PATTERNS = [
   /\bslab protector\b/,
   /\bprotective case\b/,
   /\bcard saver\b/,
+  /\bdisplay case\b/,
   /\bdisplay stand\b/,
+  /\bextended art\b/,
+  /\bextended artwork\b/,
   /\bstand only\b/,
   /\bcase only\b/,
   /\bempty\b/,
@@ -253,8 +341,19 @@ const BLOCKED_ACCESSORY_PATTERNS = [
   /\bsticker\b/,
   /\bmagnet\b/,
   /\bframe\b/,
+  /\bfan made\b/,
+  /\bdiy\b/,
+  /\bfake\b/,
+  /\bgold foil\b/,
+  /\bgift\b/,
+  /\bcollectible\b/,
+  /\bnot authentic\b/,
+  /\breprint\b/,
+  /\breplica\b/,
+  /\bproxy\b/,
   /\bproxy\b/,
   /\bcustom\b/,
+  /\bcust0m\b/,
 ];
 
 const GRADED_PATTERNS = [/\bpsa\b/, /\bbgs\b/, /\bcgc\b/, /\bsgc\b/, /\bbeckett\b/, /\bgraded\b/, /\bslab\b/];

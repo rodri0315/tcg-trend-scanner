@@ -1,4 +1,5 @@
 import { pool } from '../db/pool';
+import type { LatestListingDebug, ListingDebugEntry, ListingDebugGroup } from '../types';
 
 export interface DashboardFilters {
   game?: string;
@@ -82,6 +83,7 @@ export interface CardDetail {
   ebayQuery: string;
   tags: string[];
   history: CardHistoryPoint[];
+  latestListingDebug: LatestListingDebug | null;
 }
 
 export async function getDashboardSummary(filters: DashboardFilters): Promise<DashboardSummary> {
@@ -364,6 +366,26 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
     [cardId],
   );
 
+  const latestDebugResult = await pool.query<{
+    snapshot_date: string;
+    query_used: string;
+    raw_payload: unknown;
+  }>(
+    `
+      select
+        snapshot_date::text as snapshot_date,
+        query_used,
+        raw_payload
+      from ebay_daily
+      where card_id = $1
+      order by snapshot_date desc
+      limit 1
+    `,
+    [cardId],
+  );
+
+  const latestDebugRow = latestDebugResult.rows[0];
+
   return {
     id: row.id,
     game: row.game,
@@ -389,6 +411,9 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
         spikeFlag: historyRow.spike_flag,
       }))
       .reverse(),
+    latestListingDebug: latestDebugRow
+      ? parseLatestListingDebug(latestDebugRow.snapshot_date, latestDebugRow.query_used, latestDebugRow.raw_payload)
+      : null,
   };
 }
 
@@ -452,6 +477,207 @@ function buildCardFilterClause(
 }
 
 function toNullableNumber(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseLatestListingDebug(
+  snapshotDate: string,
+  queryUsed: string,
+  rawPayload: unknown,
+): LatestListingDebug | null {
+  const payload = asRecord(rawPayload);
+  const filters = asRecord(payload?.filters);
+  const fixedPrice = asRecord(payload?.fixedPrice);
+  const auctions = asRecord(payload?.auctions);
+
+  if (!filters || !fixedPrice || !auctions) {
+    return null;
+  }
+
+  const binFilter = asRecord(filters.bin);
+  const auctionFilter = asRecord(filters.auctions);
+
+  if (!binFilter || !auctionFilter) {
+    return null;
+  }
+
+  const fixedPriceItems = asArray(fixedPrice.itemSummaries);
+  const auctionItems = asArray(auctions.itemSummaries);
+
+  return {
+    snapshotDate,
+    queryUsed,
+    fixedPriceKept: buildKeptGroup(
+      'BIN kept',
+      toNumberValue(binFilter.priceSanityKept) ?? toNumberValue(binFilter.kept) ?? 0,
+      fixedPriceItems,
+      buildBinRejectedTitleSet(binFilter),
+      false,
+    ),
+    fixedPriceRejected: buildRejectedGroup('BIN rejected', toNumberValue(binFilter.total) ?? fixedPriceItems.length, binFilter),
+    auctionKept: buildKeptGroup(
+      'Auctions kept',
+      toNumberValue(auctionFilter.kept) ?? 0,
+      auctionItems,
+      buildRejectedTitleSet(auctionFilter.rejected),
+      true,
+    ),
+    auctionRejected: buildRejectedGroup(
+      'Auctions rejected',
+      toNumberValue(auctionFilter.total) ?? auctionItems.length,
+      auctionFilter,
+    ),
+  };
+}
+
+function buildKeptGroup(
+  label: string,
+  keptCount: number,
+  items: unknown[],
+  rejectedTitles: Set<string>,
+  useCurrentBidPrice: boolean,
+): ListingDebugGroup {
+  const entries = items
+    .map((item) => asRecord(item))
+    .filter((item): item is Record<string, unknown> => item !== null)
+    .filter((item) => !rejectedTitles.has(String(item.title ?? '(untitled listing)')))
+    .map((item) => ({
+      title: String(item.title ?? '(untitled listing)'),
+      price: extractListingPrice(item, useCurrentBidPrice),
+      reason: null,
+      daysLeft: useCurrentBidPrice ? extractDaysLeft(item.itemEndDate) : null,
+      imageUrl: extractImageUrl(item.image),
+      itemWebUrl: extractStringValue(item.itemWebUrl),
+    }));
+
+  if (useCurrentBidPrice) {
+    entries.sort((left, right) => compareDaysLeft(left.daysLeft, right.daysLeft));
+  }
+
+  return {
+    label,
+    total: keptCount,
+    kept: keptCount,
+    entries: entries.slice(0, 12),
+  };
+}
+
+function buildRejectedGroup(label: string, total: number, filterRecord: Record<string, unknown>): ListingDebugGroup {
+  const titleRejections = asArray(filterRecord.rejected).map((entry) => {
+    const record = asRecord(entry);
+    return {
+      title: String(record?.title ?? '(untitled listing)'),
+      price: null,
+      reason: String(record?.reason ?? 'rejected'),
+      daysLeft: null,
+      imageUrl: null,
+      itemWebUrl: null,
+    };
+  });
+
+  const priceRejections = asArray(filterRecord.priceSanityRejected).map((entry) => {
+    const record = asRecord(entry);
+    return {
+      title: String(record?.title ?? '(untitled listing)'),
+      price: toNumberValue(record?.price),
+      reason: String(record?.reason ?? 'price_outlier'),
+      daysLeft: null,
+      imageUrl: null,
+      itemWebUrl: null,
+    };
+  });
+
+  const entries = [...titleRejections, ...priceRejections].slice(0, 16);
+
+  return {
+    label,
+    total: entries.length,
+    kept: 0,
+    entries,
+  };
+}
+
+function buildBinRejectedTitleSet(filterRecord: Record<string, unknown>): Set<string> {
+  return new Set([
+    ...Array.from(buildRejectedTitleSet(filterRecord.rejected)),
+    ...asArray(filterRecord.priceSanityRejected).map((entry) => String(asRecord(entry)?.title ?? '(untitled listing)')),
+  ]);
+}
+
+function buildRejectedTitleSet(rejections: unknown): Set<string> {
+  return new Set(asArray(rejections).map((entry) => String(asRecord(entry)?.title ?? '(untitled listing)')));
+}
+
+function extractListingPrice(item: Record<string, unknown>, useCurrentBidPrice: boolean): number | null {
+  const priceRecord = asRecord(useCurrentBidPrice ? item.currentBidPrice : item.price);
+  const shippingOptions = asArray(item.shippingOptions);
+  const firstShipping = asRecord(shippingOptions[0]);
+  const shippingCost = asRecord(firstShipping?.shippingCost);
+  const price = toNumberValue(priceRecord?.value);
+  const shipping = toNumberValue(shippingCost?.value) ?? 0;
+
+  if (price === null) {
+    return null;
+  }
+
+  return Math.round((price + shipping) * 100) / 100;
+}
+
+function extractDaysLeft(value: unknown): number | null {
+  if (typeof value !== 'string' || value.trim() === '') {
+    return null;
+  }
+
+  const endAt = new Date(value);
+  const endTimestamp = endAt.getTime();
+  if (!Number.isFinite(endTimestamp)) {
+    return null;
+  }
+
+  const diffMs = endTimestamp - Date.now();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  return Math.max(0, Math.ceil(diffDays));
+}
+
+function compareDaysLeft(left: number | null, right: number | null): number {
+  if (left === null && right === null) {
+    return 0;
+  }
+
+  if (left === null) {
+    return 1;
+  }
+
+  if (right === null) {
+    return -1;
+  }
+
+  return left - right;
+}
+
+function extractImageUrl(value: unknown): string | null {
+  const image = asRecord(value);
+  return extractStringValue(image?.imageUrl);
+}
+
+function extractStringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function toNumberValue(value: unknown): number | null {
   if (value === null || value === undefined) {
     return null;
   }

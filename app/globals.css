@@ -392,6 +392,22 @@ a {
   justify-items: start;
 }
 
+.heroImageLink {
+  display: block;
+  width: 180px;
+}
+
+.heroImage {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: rgba(255, 251, 244, 0.66);
+  box-shadow: 0 16px 28px rgba(82, 56, 33, 0.12);
+}
+
 .queryBlock {
   margin: 0;
   padding: 14px 16px;
@@ -401,6 +417,79 @@ a {
   line-height: 1.5;
 }
 
+.debugMeta,
+.debugMetaLink {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.debugPanel {
+  display: grid;
+  gap: 16px;
+}
+
+.debugQuery {
+  font-family: "SFMono-Regular", "Menlo", monospace;
+  font-size: 0.9em;
+}
+
+.debugGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.debugCard {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 253, 248, 0.88);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.debugCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.debugCardHead h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.debugList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.debugList li {
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.debugList li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.debugList strong,
+.debugList em {
+  font-size: 0.82rem;
+}
+
+.debugList em {
+  color: var(--muted);
+  font-style: normal;
+}
+
 @media (max-width: 960px) {
   .metricGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -408,6 +497,10 @@ a {
 
   .heroPanel,
   .detailGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .debugGrid {
     grid-template-columns: 1fr;
   }
 }

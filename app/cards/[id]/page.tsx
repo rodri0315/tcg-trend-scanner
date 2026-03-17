@@ -25,6 +25,7 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
 
   const floorSeries = card.history.map((point) => point.floorBin);
   const trendSeries = card.history.map((point) => point.trendScore);
+  const heroListing = card.latestListingDebug?.fixedPriceKept.entries.find((entry) => entry.imageUrl !== null) ?? null;
   const headerHelp: Array<{ label: string; help: string }> = [
     { label: 'Date', help: 'Snapshot day for this card. We use these daily points to compare short-term momentum and inventory changes.' },
     { label: 'Floor', help: 'Lowest filtered Buy It Now total on eBay, including shipping. This is our quickest read on the live asking floor.' },
@@ -59,6 +60,20 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
           </div>
         </div>
         <div className="heroActions">
+          {heroListing?.imageUrl ? (
+            <a
+              href={heroListing.itemWebUrl ?? '#'}
+              className="heroImageLink"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <img
+                src={heroListing.imageUrl}
+                alt={`${card.name} listing preview`}
+                className="heroImage"
+              />
+            </a>
+          ) : null}
           <Link href="/cards" className="textLink">
             Back to watchlist
           </Link>
@@ -140,6 +155,79 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
           </table>
         </div>
       </section>
+
+      <section className="panel">
+        <div className="sectionHead">
+          <div>
+            <p className="eyebrow">Filter debug</p>
+            <h3>Latest listing review</h3>
+          </div>
+        </div>
+
+        {card.latestListingDebug === null ? (
+          <p className="emptyState">No listing debug payload is available for this card yet.</p>
+        ) : (
+          <div className="debugPanel">
+            <p className="subtle">
+              Snapshot {card.latestListingDebug.snapshotDate} using query: <span className="debugQuery">{card.latestListingDebug.queryUsed}</span>
+            </p>
+            <div className="debugGrid">
+              {[
+                card.latestListingDebug.fixedPriceKept,
+                card.latestListingDebug.fixedPriceRejected,
+                card.latestListingDebug.auctionKept,
+                card.latestListingDebug.auctionRejected,
+              ].map((group) => (
+                <article key={group.label} className="debugCard">
+                  <div className="debugCardHead">
+                    <h4>{group.label}</h4>
+                    <span className="pill">{group.entries.length}/{group.total}</span>
+                  </div>
+                  {group.entries.length === 0 ? (
+                    <p className="subtle">No listings in this bucket.</p>
+                  ) : (
+                    <ul className="debugList">
+                      {group.entries.map((entry, index) => (
+                        <li key={`${group.label}-${index}`}>
+                          <strong>{entry.price === null ? 'n/a' : `$${entry.price.toFixed(2)}`}</strong>
+                          <span>{entry.title}</span>
+                          {group.label.toLowerCase().includes('auction') ? (
+                            <span className="debugMeta">
+                              {formatDaysLeft(entry.daysLeft)}
+                            </span>
+                          ) : null}
+                          {entry.itemWebUrl ? (
+                            <a href={entry.itemWebUrl} target="_blank" rel="noreferrer" className="debugMetaLink">
+                              View listing
+                            </a>
+                          ) : null}
+                          {entry.reason ? <em>{entry.reason}</em> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
     </DashboardShell>
   );
+}
+
+function formatDaysLeft(daysLeft: number | null): string {
+  if (daysLeft === null) {
+    return 'Days left: n/a';
+  }
+
+  if (daysLeft === 0) {
+    return 'Ends today';
+  }
+
+  if (daysLeft === 1) {
+    return '1 day left';
+  }
+
+  return `${daysLeft} days left`;
 }

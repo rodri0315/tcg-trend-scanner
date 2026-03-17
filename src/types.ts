@@ -26,6 +26,31 @@ export interface EbaySnapshot {
   rawPayload: unknown;
 }
 
+export interface ListingDebugEntry {
+  title: string;
+  price: number | null;
+  reason: string | null;
+  daysLeft: number | null;
+  imageUrl: string | null;
+  itemWebUrl: string | null;
+}
+
+export interface ListingDebugGroup {
+  label: string;
+  total: number;
+  kept: number;
+  entries: ListingDebugEntry[];
+}
+
+export interface LatestListingDebug {
+  snapshotDate: string;
+  queryUsed: string;
+  fixedPriceKept: ListingDebugGroup;
+  fixedPriceRejected: ListingDebugGroup;
+  auctionKept: ListingDebugGroup;
+  auctionRejected: ListingDebugGroup;
+}
+
 export interface SignalSnapshot {
   cardId: number;
   signalDate: string;
