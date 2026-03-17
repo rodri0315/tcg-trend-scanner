@@ -24,6 +24,8 @@ interface EbayItemSummary {
   currentBidPrice?: EbayPrice;
   bidCount?: number;
   itemEndDate?: string;
+  condition?: string;
+  conditionId?: string;
 }
 
 interface EbaySearchResponse {
@@ -226,6 +228,11 @@ function getListingRejectionReason(card: Card, item: EbayItemSummary): string | 
     return 'missing_title';
   }
 
+  const structuredGradeReason = getStructuredGradeRejectionReason(card, item);
+  if (structuredGradeReason) {
+    return structuredGradeReason;
+  }
+
   if (containsBlockedAccessoryTerm(normalizedTitle)) {
     return 'accessory_or_non_card_match';
   }
@@ -279,6 +286,28 @@ function containsGradedTerm(title: string): boolean {
 
 function containsPsa10Term(title: string): boolean {
   return /(?:^|\s)psa\s*10(?:\s|$)/.test(title);
+}
+
+function getStructuredGradeRejectionReason(card: Card, item: EbayItemSummary): string | null {
+  const normalizedCondition = normalizeText(item.condition);
+  if (!normalizedCondition) {
+    return null;
+  }
+
+  const explicitlyUngraded = normalizedCondition.includes('ungraded');
+  const explicitlyGraded =
+    normalizedCondition.includes('graded') &&
+    !explicitlyUngraded;
+
+  if (card.marketSegment === 'raw' && explicitlyGraded) {
+    return 'structured_condition_graded';
+  }
+
+  if (card.marketSegment === 'psa_10' && explicitlyUngraded) {
+    return 'structured_condition_ungraded';
+  }
+
+  return null;
 }
 
 function getPriceSanityRatios(marketSegment: string): {
