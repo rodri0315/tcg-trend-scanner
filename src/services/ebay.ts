@@ -26,11 +26,25 @@ interface EbayItemSummary {
   itemEndDate?: string;
   condition?: string;
   conditionId?: string;
+  itemHref?: string;
 }
 
 interface EbaySearchResponse {
   total?: number;
   itemSummaries?: EbayItemSummary[];
+}
+
+interface EbayNameValue {
+  name?: string;
+  value?: string;
+  values?: Array<{ content?: string }>;
+}
+
+interface EbayItemDetail {
+  condition?: string;
+  conditionId?: string;
+  localizedAspects?: EbayNameValue[];
+  conditionDescriptors?: EbayNameValue[];
 }
 
 export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): Promise<EbaySnapshot[]> {
@@ -49,8 +63,8 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
 
     const rawBinItems = binResponse.itemSummaries ?? [];
     const rawAuctionItems = auctionResponse.itemSummaries ?? [];
-    const filteredBin = filterEbayItems(card, rawBinItems);
-    const filteredAuction = filterEbayItems(card, rawAuctionItems);
+    const filteredBin = await filterEbayItems(card, rawBinItems, accessToken, 'FIXED_PRICE');
+    const filteredAuction = await filterEbayItems(card, rawAuctionItems, accessToken, 'AUCTION');
     const auctionItems = filteredAuction.items;
     const medianAuctionCurrentPrice = median(
       auctionItems
@@ -199,10 +213,12 @@ function filterBinPriceOutliers(
   };
 }
 
-function filterEbayItems(
+async function filterEbayItems(
   card: Card,
   items: EbayItemSummary[],
-): { items: EbayItemSummary[]; rejections: Array<{ title: string; reason: string }> } {
+  accessToken: string,
+  buyingOption: 'FIXED_PRICE' | 'AUCTION',
+): Promise<{ items: EbayItemSummary[]; rejections: Array<{ title: string; reason: string }> }> {
   const kept: EbayItemSummary[] = [];
   const rejections: Array<{ title: string; reason: string }> = [];
 
@@ -219,7 +235,137 @@ function filterEbayItems(
     kept.push(item);
   }
 
-  return { items: kept, rejections };
+  if (kept.length === 0) {
+    return { items: kept, rejections };
+  }
+
+  const detailValidated = await filterEbayItemsByDetail(card, kept, accessToken, buyingOption);
+  rejections.push(...detailValidated.rejections);
+
+  return { items: detailValidated.items, rejections };
+}
+
+async function filterEbayItemsByDetail(
+  card: Card,
+  items: EbayItemSummary[],
+  accessToken: string,
+  buyingOption: 'FIXED_PRICE' | 'AUCTION',
+): Promise<{ items: EbayItemSummary[]; rejections: Array<{ title: string; reason: string }> }> {
+  const candidateIndexes = selectDetailValidationIndexes(items, buyingOption);
+  if (candidateIndexes.length === 0) {
+    return { items, rejections: [] };
+  }
+
+  const details = await Promise.all(
+    candidateIndexes.map(async (index) => {
+      const item = items[index];
+      if (!item.itemHref) {
+        return { index, reason: null };
+      }
+
+      try {
+        const detail = await getEbayItemDetail(item.itemHref, accessToken);
+        return {
+          index,
+          reason: getDetailGradeRejectionReason(card, detail),
+        };
+      } catch {
+        return { index, reason: null };
+      }
+    }),
+  );
+
+  const rejectedIndexes = new Set<number>();
+  const rejections: Array<{ title: string; reason: string }> = [];
+
+  for (const detail of details) {
+    if (!detail.reason) {
+      continue;
+    }
+
+    rejectedIndexes.add(detail.index);
+    rejections.push({
+      title: items[detail.index]?.title ?? '(untitled listing)',
+      reason: detail.reason,
+    });
+  }
+
+  return {
+    items: items.filter((_, index) => !rejectedIndexes.has(index)),
+    rejections,
+  };
+}
+
+function selectDetailValidationIndexes(
+  items: EbayItemSummary[],
+  buyingOption: 'FIXED_PRICE' | 'AUCTION',
+): number[] {
+  const scored = items
+    .map((item, index) => ({
+      index,
+      price:
+        buyingOption === 'AUCTION'
+          ? totalListingPrice(item.currentBidPrice?.value, item.shippingOptions)
+          : totalListingPrice(item.price?.value, item.shippingOptions),
+    }))
+    .filter((entry): entry is { index: number; price: number } => entry.price !== null)
+    .sort((left, right) => left.price - right.price)
+    .slice(0, DETAIL_VALIDATION_LIMIT);
+
+  return scored.map((entry) => entry.index);
+}
+
+async function getEbayItemDetail(itemHref: string, accessToken: string): Promise<EbayItemDetail> {
+  const url = new URL(itemHref);
+  url.search = '';
+
+  const response = await axios.get<EbayItemDetail>(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'X-EBAY-C-MARKETPLACE-ID': config.ebayMarketplaceId,
+    },
+  });
+
+  return response.data;
+}
+
+function getDetailGradeRejectionReason(card: Card, detail: EbayItemDetail): string | null {
+  const normalizedCondition = normalizeText(detail.condition);
+  const aspects = collectAspectValues(detail);
+  const hasCertNumber = hasAspectValue(aspects, ['certification number', 'cert number', 'certification #']);
+  const gradeValue = getAspectValue(aspects, ['grade']);
+  const gradedValue = getAspectValue(aspects, ['graded']);
+  const gradingCompany = getAspectValue(aspects, ['professional grader', 'grader', 'grading company']);
+
+  const explicitlyUngraded =
+    normalizedCondition.includes('ungraded') ||
+    isTruthyNoValue(gradedValue) ||
+    gradeValue === 'ungraded';
+  const explicitlyGraded =
+    (normalizedCondition.includes('graded') && !normalizedCondition.includes('ungraded')) ||
+    isTruthyYesValue(gradedValue) ||
+    hasCertNumber ||
+    Boolean(gradeValue && gradeValue !== 'ungraded');
+
+  if (card.marketSegment === 'raw' && explicitlyGraded) {
+    return 'detail_indicates_graded';
+  }
+
+  if (card.marketSegment === 'psa_10') {
+    if (explicitlyUngraded) {
+      return 'detail_indicates_ungraded';
+    }
+
+    if (gradingCompany && !gradingCompany.includes('psa')) {
+      return 'detail_wrong_grader';
+    }
+
+    if (gradeValue && !gradeLooksLikeTen(gradeValue)) {
+      return 'detail_wrong_grade';
+    }
+  }
+
+  return null;
 }
 
 function getListingRejectionReason(card: Card, item: EbayItemSummary): string | null {
@@ -286,6 +432,54 @@ function containsGradedTerm(title: string): boolean {
 
 function containsPsa10Term(title: string): boolean {
   return /(?:^|\s)psa\s*10(?:\s|$)/.test(title);
+}
+
+function collectAspectValues(detail: EbayItemDetail): Map<string, string> {
+  const aspects = new Map<string, string>();
+
+  for (const aspect of [...(detail.localizedAspects ?? []), ...(detail.conditionDescriptors ?? [])]) {
+    const name = normalizeText(aspect.name);
+    if (!name) {
+      continue;
+    }
+
+    const value =
+      normalizeText(aspect.value) ||
+      normalizeText(aspect.values?.map((entry) => entry.content ?? '').join(' '));
+
+    if (value) {
+      aspects.set(name, value);
+    }
+  }
+
+  return aspects;
+}
+
+function hasAspectValue(aspects: Map<string, string>, names: string[]): boolean {
+  return names.some((name) => aspects.has(normalizeText(name)));
+}
+
+function getAspectValue(aspects: Map<string, string>, names: string[]): string | null {
+  for (const name of names) {
+    const value = aspects.get(normalizeText(name));
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function isTruthyYesValue(value: string | null): boolean {
+  return value === 'yes' || value === 'true';
+}
+
+function isTruthyNoValue(value: string | null): boolean {
+  return value === 'no' || value === 'false';
+}
+
+function gradeLooksLikeTen(value: string): boolean {
+  return /\b10\b/.test(value) || /\bgem mint 10\b/.test(value);
 }
 
 function getStructuredGradeRejectionReason(card: Card, item: EbayItemSummary): string | null {

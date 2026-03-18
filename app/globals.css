@@ -516,6 +516,23 @@ a {
   line-height: 1.5;
 }
 
+.queryActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.queryActionButton {
+  border: 1px solid var(--line);
+  background: rgba(255, 251, 244, 0.9);
+  padding: 10px 14px;
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+
 .debugMeta,
 .debugMetaLink {
   color: var(--muted);

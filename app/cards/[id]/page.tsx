@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { DashboardShell } from '../../../components/dashboard-shell';
+import { QueryActions } from '../../../components/query-actions';
 import { Sparkline } from '../../../components/sparkline';
 import { getCardDetail } from '../../../src/dashboard/data';
 
@@ -26,6 +27,7 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
   const floorSeries = card.history.map((point) => point.floorBin);
   const trendSeries = card.history.map((point) => point.trendScore);
   const heroListing = card.latestListingDebug?.fixedPriceKept.entries.find((entry) => entry.imageUrl !== null) ?? null;
+  const ebaySearchUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(card.ebayQuery)}`;
   const headerHelp: Array<{ label: string; help: string }> = [
     { label: 'Date', help: 'Snapshot day for this card. We use these daily points to compare short-term momentum and inventory changes.' },
     { label: 'Floor', help: 'Lowest filtered Buy It Now total on eBay, including shipping. This is our quickest read on the live asking floor.' },
@@ -78,6 +80,7 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
             Back to watchlist
           </Link>
           <p className="queryBlock">{card.ebayQuery}</p>
+          <QueryActions query={card.ebayQuery} searchUrl={ebaySearchUrl} />
         </div>
       </section>
 
