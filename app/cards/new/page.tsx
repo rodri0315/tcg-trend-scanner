@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export default function NewCardPage() {
   return (
     <DashboardShell>
-      <section className="heroPanel">
+      <section className="heroPanel section--narrow">
         <div>
           <p className="eyebrow">Watchlist management</p>
           <h2>Add a new card to the tracked universe.</h2>
@@ -24,7 +24,7 @@ export default function NewCardPage() {
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel section--narrow">
         <div className="sectionHead">
           <div>
             <p className="eyebrow">New tracked card</p>

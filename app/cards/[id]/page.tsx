@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { DashboardShell } from '../../../components/dashboard-shell';
+import { MobileTimelineTable } from '../../../components/mobile-timeline-table';
 import { QueryActions } from '../../../components/query-actions';
 import { Sparkline } from '../../../components/sparkline';
 import { getCardDetail } from '../../../src/dashboard/data';
@@ -41,7 +42,7 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
 
   return (
     <DashboardShell>
-      <section className="heroPanel">
+      <section className="heroPanel section--narrow">
         <div>
           <p className="eyebrow">
             {card.game} · {card.language} · {card.marketSegment} · {card.productType}
@@ -84,8 +85,8 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
         </div>
       </section>
 
-      <section className="detailGrid">
-        <article className="panel">
+      <section className="detailGrid section--narrow">
+        <article className="panel panel--purple">
           <div className="sectionHead">
             <div>
               <p className="eyebrow">Floor history</p>
@@ -95,7 +96,7 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
           <Sparkline values={floorSeries} />
         </article>
 
-        <article className="panel">
+        <article className="panel panel--teal">
           <div className="sectionHead">
             <div>
               <p className="eyebrow">Score history</p>
@@ -106,13 +107,15 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
         </article>
       </section>
 
-      <section className="panel">
+      <section className="panel panel--amber section--narrow">
         <div className="sectionHead">
           <div>
             <p className="eyebrow">Last 30 snapshots</p>
             <h3>Daily timeline</h3>
           </div>
         </div>
+
+        <MobileTimelineTable data={card.history} />
 
         <div className="tableWrap">
           <table className="dataTable">
@@ -159,7 +162,7 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel panel--rose section--narrow">
         <div className="sectionHead">
           <div>
             <p className="eyebrow">Filter debug</p>
@@ -176,12 +179,12 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
             </p>
             <div className="debugGrid">
               {[
-                card.latestListingDebug.fixedPriceKept,
-                card.latestListingDebug.fixedPriceRejected,
-                card.latestListingDebug.auctionKept,
-                card.latestListingDebug.auctionRejected,
-              ].map((group) => (
-                <article key={group.label} className="debugCard">
+                { data: card.latestListingDebug.fixedPriceKept, color: 'success' },
+                { data: card.latestListingDebug.fixedPriceRejected, color: 'warning' },
+                { data: card.latestListingDebug.auctionKept, color: 'info' },
+                { data: card.latestListingDebug.auctionRejected, color: 'error' },
+              ].map(({ data: group, color }) => (
+                <article key={group.label} className={`debugCard debugCard--${color}`}>
                   <div className="debugCardHead">
                     <h4>{group.label}</h4>
                     <span className="pill">{group.entries.length}/{group.total}</span>
