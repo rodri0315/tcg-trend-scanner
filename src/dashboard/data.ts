@@ -519,7 +519,12 @@ function parseLatestListingDebug(
       buildBinRejectedTitleSet(binFilter),
       false,
     ),
-    fixedPriceRejected: buildRejectedGroup('BIN rejected', toNumberValue(binFilter.total) ?? fixedPriceItems.length, binFilter),
+    fixedPriceRejected: buildRejectedGroup(
+      'BIN rejected',
+      toNumberValue(binFilter.total) ?? fixedPriceItems.length,
+      binFilter,
+      fixedPriceItems,
+    ),
     auctionKept: buildKeptGroup(
       'Auctions kept',
       toNumberValue(auctionFilter.kept) ?? 0,
@@ -531,6 +536,7 @@ function parseLatestListingDebug(
       'Auctions rejected',
       toNumberValue(auctionFilter.total) ?? auctionItems.length,
       auctionFilter,
+      auctionItems,
     ),
   };
 }
@@ -567,28 +573,39 @@ function buildKeptGroup(
   };
 }
 
-function buildRejectedGroup(label: string, total: number, filterRecord: Record<string, unknown>): ListingDebugGroup {
+function buildRejectedGroup(
+  label: string,
+  total: number,
+  filterRecord: Record<string, unknown>,
+  sourceItems: unknown[] = [],
+): ListingDebugGroup {
+  const sourceLookup = buildSourceItemLookup(sourceItems, label.toLowerCase().includes('auction'));
+
   const titleRejections = asArray(filterRecord.rejected).map((entry) => {
     const record = asRecord(entry);
+    const title = String(record?.title ?? '(untitled listing)');
+    const source = sourceLookup.get(title);
     return {
-      title: String(record?.title ?? '(untitled listing)'),
-      price: null,
+      title,
+      price: source?.price ?? null,
       reason: String(record?.reason ?? 'rejected'),
       daysLeft: null,
-      imageUrl: null,
-      itemWebUrl: null,
+      imageUrl: source?.imageUrl ?? null,
+      itemWebUrl: source?.itemWebUrl ?? null,
     };
   });
 
   const priceRejections = asArray(filterRecord.priceSanityRejected).map((entry) => {
     const record = asRecord(entry);
+    const title = String(record?.title ?? '(untitled listing)');
+    const source = sourceLookup.get(title);
     return {
-      title: String(record?.title ?? '(untitled listing)'),
-      price: toNumberValue(record?.price),
+      title,
+      price: toNumberValue(record?.price) ?? source?.price ?? null,
       reason: String(record?.reason ?? 'price_outlier'),
       daysLeft: null,
-      imageUrl: null,
-      itemWebUrl: null,
+      imageUrl: source?.imageUrl ?? null,
+      itemWebUrl: source?.itemWebUrl ?? null,
     };
   });
 
@@ -600,6 +617,33 @@ function buildRejectedGroup(label: string, total: number, filterRecord: Record<s
     kept: 0,
     entries,
   };
+}
+
+function buildSourceItemLookup(
+  sourceItems: unknown[],
+  useCurrentBidPrice: boolean,
+): Map<string, { price: number | null; imageUrl: string | null; itemWebUrl: string | null }> {
+  const lookup = new Map<string, { price: number | null; imageUrl: string | null; itemWebUrl: string | null }>();
+
+  for (const item of sourceItems) {
+    const record = asRecord(item);
+    if (!record) {
+      continue;
+    }
+
+    const title = String(record.title ?? '(untitled listing)');
+    if (lookup.has(title)) {
+      continue;
+    }
+
+    lookup.set(title, {
+      price: extractListingPrice(record, useCurrentBidPrice),
+      imageUrl: extractImageUrl(record.image),
+      itemWebUrl: extractStringValue(record.itemWebUrl),
+    });
+  }
+
+  return lookup;
 }
 
 function buildBinRejectedTitleSet(filterRecord: Record<string, unknown>): Set<string> {
