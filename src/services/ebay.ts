@@ -181,27 +181,56 @@ function filterBinPriceOutliers(
 
   const rejections: Array<{ title: string; price: number; reason: string }> = [];
 
-  while (pricedItems.length >= 3) {
+  while (pricedItems.length >= 2) {
+    const clusterBoundary = findLowPriceClusterBoundary(pricedItems, card.marketSegment);
+    if (clusterBoundary > 0) {
+      const rejectedCluster = pricedItems.splice(0, clusterBoundary);
+      const referencePrice = median(pricedItems.slice(0, Math.min(3, pricedItems.length)).map((entry) => entry.price)) ?? pricedItems[0]?.price ?? null;
+
+      for (const rejected of rejectedCluster) {
+        rejections.push({
+          title: rejected.item.title ?? '(untitled listing)',
+          price: rejected.price,
+          reason: buildClusterOutlierReason(rejected.price, referencePrice, medianAuctionCurrentPrice),
+        });
+      }
+
+      continue;
+    }
+
     const candidate = pricedItems[0];
-    const next = pricedItems[1];
-    const prices = pricedItems.map((entry) => entry.price);
-    const binMedian = median(prices);
-    const ratioConfig = getPriceSanityRatios(card.marketSegment);
-    const suspiciousVsNext = next !== undefined && candidate.price < round(next.price * ratioConfig.nextListingFloorRatio);
-    const suspiciousVsBinMedian =
-      binMedian !== null && candidate.price < round(binMedian * ratioConfig.binMedianFloorRatio);
+    const referencePrices = pricedItems.slice(1).map((entry) => entry.price);
+    const next = referencePrices[0] ?? null;
+    const referenceMedian = median(referencePrices);
+    const priceSanityConfig = getPriceSanityConfig(card.marketSegment);
+    const referenceAnchor =
+      median(referencePrices.slice(0, Math.min(3, referencePrices.length))) ??
+      referenceMedian ??
+      next;
+    const suspiciousVsNext =
+      next !== null && candidate.price < round(next * priceSanityConfig.nextListingFloorRatio);
+    const suspiciousVsReference =
+      referenceAnchor !== null &&
+      candidate.price < round(referenceAnchor * priceSanityConfig.referenceFloorRatio) &&
+      referenceAnchor - candidate.price >= priceSanityConfig.minimumAbsoluteGap;
     const suspiciousVsAuctionMedian =
       medianAuctionCurrentPrice !== null &&
-      candidate.price < round(medianAuctionCurrentPrice * ratioConfig.auctionMedianFloorRatio);
+      candidate.price < round(medianAuctionCurrentPrice * priceSanityConfig.auctionMedianFloorRatio) &&
+      medianAuctionCurrentPrice - candidate.price >= priceSanityConfig.minimumAbsoluteGap;
 
-    if (!suspiciousVsNext || (!suspiciousVsBinMedian && !suspiciousVsAuctionMedian)) {
+    if (!suspiciousVsNext || (!suspiciousVsReference && !suspiciousVsAuctionMedian)) {
       break;
     }
 
     rejections.push({
       title: candidate.item.title ?? '(untitled listing)',
       price: candidate.price,
-      reason: buildPriceSanityReason(candidate.price, next?.price ?? null, binMedian, medianAuctionCurrentPrice),
+      reason: buildPriceSanityReason(
+        candidate.price,
+        next,
+        referenceAnchor,
+        medianAuctionCurrentPrice,
+      ),
     });
     pricedItems.shift();
   }
@@ -211,6 +240,52 @@ function filterBinPriceOutliers(
     prices: pricedItems.map((entry) => entry.price),
     rejections,
   };
+}
+
+function findLowPriceClusterBoundary(
+  pricedItems: Array<{ item: EbayItemSummary; price: number }>,
+  marketSegment: string,
+): number {
+  if (pricedItems.length < 2) {
+    return 0;
+  }
+
+  const config = getPriceSanityConfig(marketSegment);
+  const maxComparisons = Math.min(pricedItems.length - 1, DETAIL_VALIDATION_LIMIT);
+  let bestBoundary = 0;
+  let bestRatio = 0;
+
+  for (let index = 0; index < maxComparisons; index += 1) {
+    const lower = pricedItems[index]?.price;
+    const upper = pricedItems[index + 1]?.price;
+    if (lower === undefined || upper === undefined || lower <= 0) {
+      continue;
+    }
+
+    const ratio = upper / lower;
+    const absoluteGap = upper - lower;
+    const referenceAnchor =
+      median(pricedItems.slice(index + 1, index + 4).map((entry) => entry.price)) ??
+      upper;
+
+    const lowerClusterMax = pricedItems[index].price;
+    const clearlyBelowReference =
+      referenceAnchor > 0 &&
+      lowerClusterMax < round(referenceAnchor * config.referenceFloorRatio) &&
+      referenceAnchor - lowerClusterMax >= config.minimumAbsoluteGap;
+
+    if (
+      ratio >= config.clusterGapRatio &&
+      absoluteGap >= config.clusterMinimumAbsoluteGap &&
+      clearlyBelowReference &&
+      ratio > bestRatio
+    ) {
+      bestBoundary = index + 1;
+      bestRatio = ratio;
+    }
+  }
+
+  return bestBoundary;
 }
 
 async function filterEbayItems(
@@ -504,35 +579,57 @@ function getStructuredGradeRejectionReason(card: Card, item: EbayItemSummary): s
   return null;
 }
 
-function getPriceSanityRatios(marketSegment: string): {
+function getPriceSanityConfig(marketSegment: string): {
   nextListingFloorRatio: number;
-  binMedianFloorRatio: number;
+  referenceFloorRatio: number;
   auctionMedianFloorRatio: number;
+  minimumAbsoluteGap: number;
+  clusterGapRatio: number;
+  clusterMinimumAbsoluteGap: number;
 } {
   if (marketSegment === 'psa_10') {
     return {
       nextListingFloorRatio: 0.55,
-      binMedianFloorRatio: 0.45,
+      referenceFloorRatio: 0.45,
       auctionMedianFloorRatio: 0.45,
+      minimumAbsoluteGap: 100,
+      clusterGapRatio: 1.8,
+      clusterMinimumAbsoluteGap: 120,
     };
   }
 
   return {
-    nextListingFloorRatio: 0.45,
-    binMedianFloorRatio: 0.3,
+    nextListingFloorRatio: 0.4,
+    referenceFloorRatio: 0.35,
     auctionMedianFloorRatio: 0.3,
+    minimumAbsoluteGap: 30,
+    clusterGapRatio: 2.5,
+    clusterMinimumAbsoluteGap: 50,
   };
+}
+
+function buildClusterOutlierReason(
+  price: number,
+  referencePrice: number | null,
+  auctionMedian: number | null,
+): string {
+  const comparisons = [
+    referencePrice === null ? null : `clusterReference=${referencePrice.toFixed(2)}`,
+    auctionMedian === null ? null : `auctionMedian=${auctionMedian.toFixed(2)}`,
+  ].filter((value): value is string => value !== null);
+
+  return `price_cluster_outlier:${price.toFixed(2)} vs ${comparisons.join(', ')}`;
 }
 
 function buildPriceSanityReason(
   price: number,
   nextPrice: number | null,
-  binMedian: number | null,
+  referencePrice: number | null,
   auctionMedian: number | null,
 ): string {
   const comparisons = [
     nextPrice === null ? null : `next=${nextPrice.toFixed(2)}`,
-    binMedian === null ? null : `binMedian=${binMedian.toFixed(2)}`,
+    referencePrice === null ? null : `reference=${referencePrice.toFixed(2)}`,
     auctionMedian === null ? null : `auctionMedian=${auctionMedian.toFixed(2)}`,
   ].filter((value): value is string => value !== null);
 
@@ -582,3 +679,5 @@ const BLOCKED_ACCESSORY_PATTERNS = [
 const GRADED_PATTERNS = [/\bpsa\b/, /\bbgs\b/, /\bcgc\b/, /\bsgc\b/, /\bbeckett\b/, /\bgraded\b/, /\bslab\b/];
 
 const GENERIC_NAME_TOKENS = new Set(['pokemon', 'one', 'piece', 'tcg', 'card']);
+
+const DETAIL_VALIDATION_LIMIT = 5;
