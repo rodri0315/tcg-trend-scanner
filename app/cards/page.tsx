@@ -80,7 +80,7 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
                       {card.name} {card.cardNumber}
                     </Link>
                     <div className="subtle">
-                      {card.setName} · {card.variant}
+                      {card.setName} · {card.variant} · {labelizeCondition(card.condition)}
                     </div>
                   </td>
                   <td>{card.game}</td>
@@ -102,4 +102,8 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
 
 function getSingleValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function labelizeCondition(value: string): string {
+  return value.replace(/_or_better$/, '+').replace(/_/g, ' ');
 }

@@ -6,6 +6,7 @@ export interface CreateCardInput {
   language: string;
   productType: string;
   marketSegment: string;
+  condition: string;
   name: string;
   setName: string;
   cardNumber: string;
@@ -22,6 +23,7 @@ export async function getCards(): Promise<Card[]> {
     language: string;
     product_type: string;
     market_segment: string;
+    condition: string;
     name: string;
     set_name: string;
     card_number: string;
@@ -36,6 +38,7 @@ export async function getCards(): Promise<Card[]> {
       language,
       product_type,
       market_segment,
+      condition,
       name,
       set_name,
       card_number,
@@ -53,6 +56,7 @@ export async function getCards(): Promise<Card[]> {
     language: row.language,
     productType: row.product_type,
     marketSegment: row.market_segment,
+    condition: row.condition,
     name: row.name,
     setName: row.set_name,
     cardNumber: row.card_number,
@@ -71,6 +75,7 @@ export async function createCard(input: CreateCardInput): Promise<number> {
         language,
         product_type,
         market_segment,
+        condition,
         name,
         set_name,
         card_number,
@@ -80,7 +85,7 @@ export async function createCard(input: CreateCardInput): Promise<number> {
         tags,
         updated_at
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
       returning id
     `,
     [
@@ -88,6 +93,7 @@ export async function createCard(input: CreateCardInput): Promise<number> {
       input.language,
       input.productType,
       input.marketSegment,
+      input.condition,
       input.name,
       input.setName,
       input.cardNumber,
