@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 import { config } from '../config';
+import { deriveMarketPriceMetrics, type PreparedListingSample } from './marketPricing';
 import type { Card, EbaySnapshot } from '../types';
 import { median, round, toNumber } from '../utils/math';
 
@@ -17,6 +18,7 @@ interface EbayShippingOption {
 }
 
 interface EbayItemSummary {
+  itemId?: string;
   title?: string;
   buyingOptions?: string[];
   price?: EbayPrice;
@@ -24,9 +26,14 @@ interface EbayItemSummary {
   currentBidPrice?: EbayPrice;
   bidCount?: number;
   itemEndDate?: string;
+  itemCreationDate?: string;
   condition?: string;
   conditionId?: string;
   itemHref?: string;
+  itemWebUrl?: string;
+  seller?: {
+    username?: string;
+  };
 }
 
 interface EbaySearchResponse {
@@ -47,6 +54,13 @@ interface EbayItemDetail {
   conditionDescriptors?: EbayNameValue[];
 }
 
+interface AuctionUsageDecision {
+  usableItems: EbayItemSummary[];
+  rejected: Array<{ title: string; reason: string; price: number | null }>;
+}
+
+const AUCTION_END_WINDOW_HOURS = 12;
+
 export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): Promise<EbaySnapshot[]> {
   if (!config.ebayClientId || !config.ebayClientSecret) {
     throw new Error('eBay credentials are required to fetch daily snapshots.');
@@ -54,6 +68,7 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
 
   const accessToken = await getEbayAccessToken();
   const snapshots: EbaySnapshot[] = [];
+  const observedAt = new Date(`${snapshotDate}T12:00:00.000Z`).toISOString();
 
   for (const card of cards) {
     const [binResponse, auctionResponse] = await Promise.all([
@@ -65,23 +80,42 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
     const rawAuctionItems = auctionResponse.itemSummaries ?? [];
     const filteredBin = await filterEbayItems(card, rawBinItems, accessToken, 'FIXED_PRICE');
     const filteredAuction = await filterEbayItems(card, rawAuctionItems, accessToken, 'AUCTION');
-    const auctionItems = filteredAuction.items;
+    const preliminaryAuctionMedian = median(
+      filteredAuction.items
+        .map((item) => totalListingPrice(item.currentBidPrice?.value, item.shippingOptions))
+        .filter((value): value is number => value !== null),
+    );
+    const saneBin = filterBinPriceOutliers(card, filteredBin.items, preliminaryAuctionMedian);
+    const binItems = saneBin.items;
+    const sampledBinListings = binItems.slice(0, 30).map((item, index) => buildPreparedListingSample(item, 'BIN', index));
+    const marketMetrics = deriveMarketPriceMetrics(sampledBinListings, snapshotDate);
+    const auctionUsage = selectUsableAuctions(card, filteredAuction.items, marketMetrics.marketPriceEstimate ?? marketMetrics.floorBin);
+    const auctionItems = auctionUsage.usableItems;
     const medianAuctionCurrentPrice = median(
       auctionItems
         .map((item) => totalListingPrice(item.currentBidPrice?.value, item.shippingOptions))
         .filter((value): value is number => value !== null),
     );
-    const saneBin = filterBinPriceOutliers(card, filteredBin.items, medianAuctionCurrentPrice);
-    const binItems = saneBin.items;
-    const binTotals = saneBin.prices;
-    const floorBin = binTotals.length > 0 ? Math.min(...binTotals) : null;
-    const floorBinCount = floorBin === null ? 0 : binTotals.filter((price) => price === floorBin).length;
+    const sampledAuctionListings = auctionItems
+      .slice()
+      .sort(
+        (left, right) =>
+          (totalListingPrice(left.currentBidPrice?.value, left.shippingOptions) ?? Number.MAX_SAFE_INTEGER) -
+          (totalListingPrice(right.currentBidPrice?.value, right.shippingOptions) ?? Number.MAX_SAFE_INTEGER),
+      )
+      .slice(0, 20)
+      .map((item, index) => buildPreparedListingSample(item, 'AUCTION', index));
+    const listingSamples = [
+      ...toListingSamples(card, observedAt, snapshotDate, sampledBinListings, marketMetrics.candidateFloorItemIds),
+      ...toListingSamples(card, observedAt, snapshotDate, sampledAuctionListings, new Set<string>()),
+    ];
 
     snapshots.push({
       cardId: card.id,
       snapshotDate,
-      floorBin,
-      floorBinCount,
+      snapshotSource: 'live',
+      floorBin: marketMetrics.floorBin,
+      floorBinCount: marketMetrics.floorBinCount,
       totalBinCount: binItems.length,
       auctionCount: auctionItems.length,
       medianAuctionBidCount: median(
@@ -90,8 +124,24 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
           .filter((value): value is number => value !== null),
       ),
       medianAuctionCurrentPrice,
+      marketPriceEstimate: marketMetrics.marketPriceEstimate,
+      marketPriceMethod: marketMetrics.marketPriceMethod,
+      floorQualityScore: marketMetrics.floorQualityScore,
+      sampledBinCount: sampledBinListings.length,
+      sampledAuctionCount: sampledAuctionListings.length,
+      sellerConcentrationTop3Pct: marketMetrics.sellerConcentrationTop3Pct,
+      freshLowCount24h: marketMetrics.freshLowCount24h,
+      newBinCount24h: marketMetrics.newBinCount24h,
       queryUsed: card.ebayQuery,
       rawPayload: {
+        marketPricing: {
+          estimate: marketMetrics.marketPriceEstimate,
+          method: marketMetrics.marketPriceMethod,
+          floorQualityScore: marketMetrics.floorQualityScore,
+          sampledBinCount: sampledBinListings.length,
+          sampledAuctionCount: sampledAuctionListings.length,
+          sellerConcentrationTop3Pct: marketMetrics.sellerConcentrationTop3Pct,
+        },
         filters: {
           bin: {
             total: rawBinItems.length,
@@ -102,17 +152,142 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
           },
           auctions: {
             total: rawAuctionItems.length,
-            kept: filteredAuction.items.length,
-            rejected: filteredAuction.rejections,
+            kept: auctionItems.length,
+            preUsageKept: filteredAuction.items.length,
+            rejected: [
+              ...filteredAuction.rejections.map((entry) => ({
+                title: entry.title,
+                reason: entry.reason,
+                price: null,
+              })),
+              ...auctionUsage.rejected,
+            ],
           },
         },
         fixedPrice: binResponse,
         auctions: auctionResponse,
       },
+      listingSamples,
     });
   }
 
   return snapshots;
+}
+
+function selectUsableAuctions(
+  card: Card,
+  items: EbayItemSummary[],
+  marketReference: number | null,
+): AuctionUsageDecision {
+  const usableItems: EbayItemSummary[] = [];
+  const rejected: Array<{ title: string; reason: string; price: number | null }> = [];
+  const minimumRatio = getAuctionMinimumBidRatio(card.marketSegment);
+
+  for (const item of items) {
+    const totalPrice = totalListingPrice(item.currentBidPrice?.value, item.shippingOptions);
+    if (!isAuctionEndingSoon(item.itemEndDate)) {
+      rejected.push({
+        title: item.title ?? '(untitled listing)',
+        reason: 'auction_not_near_end',
+        price: totalPrice,
+      });
+      continue;
+    }
+
+    if (
+      marketReference !== null &&
+      marketReference > 0 &&
+      totalPrice !== null &&
+      totalPrice < round(marketReference * minimumRatio)
+    ) {
+      rejected.push({
+        title: item.title ?? '(untitled listing)',
+        reason: 'auction_bid_below_market_floor',
+        price: totalPrice,
+      });
+      continue;
+    }
+
+    usableItems.push(item);
+  }
+
+  return { usableItems, rejected };
+}
+
+function isAuctionEndingSoon(itemEndDate: string | undefined): boolean {
+  if (!itemEndDate) {
+    return false;
+  }
+
+  const endTime = Date.parse(itemEndDate);
+  if (!Number.isFinite(endTime)) {
+    return false;
+  }
+
+  const hoursRemaining = (endTime - Date.now()) / (1000 * 60 * 60);
+  return hoursRemaining >= 0 && hoursRemaining <= AUCTION_END_WINDOW_HOURS;
+}
+
+function getAuctionMinimumBidRatio(marketSegment: string): number {
+  return marketSegment === 'psa_10' ? 0.35 : 0.2;
+}
+
+function buildPreparedListingSample(
+  item: EbayItemSummary,
+  listingType: 'BIN' | 'AUCTION',
+  index: number,
+): PreparedListingSample {
+  const listingPrice =
+    listingType === 'AUCTION'
+      ? totalListingPrice(item.currentBidPrice?.value, item.shippingOptions)
+      : totalListingPrice(item.price?.value, item.shippingOptions);
+  const price =
+    listingType === 'AUCTION'
+      ? toNumber(item.currentBidPrice?.value) ?? listingPrice ?? 0
+      : toNumber(item.price?.value) ?? listingPrice ?? 0;
+  const shipping = listingPrice === null ? 0 : round(listingPrice - price);
+  const itemWebUrl = item.itemWebUrl ?? item.itemHref ?? null;
+
+  return {
+    ebayItemId: item.itemId ?? itemWebUrl ?? `${listingType}-${index}-${item.title ?? 'listing'}`,
+    title: item.title ?? '(untitled listing)',
+    listingType,
+    condition: item.condition ?? null,
+    price,
+    shipping,
+    totalPrice: listingPrice ?? price,
+    sellerKey: item.seller?.username?.trim().toLowerCase() ?? null,
+    itemWebUrl,
+    itemCreationDate: item.itemCreationDate ?? null,
+    itemEndDate: item.itemEndDate ?? null,
+  };
+}
+
+function toListingSamples(
+  card: Card,
+  observedAt: string,
+  snapshotDate: string,
+  listings: PreparedListingSample[],
+  candidateFloorItemIds: Set<string>,
+) {
+  return listings.map((listing) => ({
+    cardId: card.id,
+    observedAt,
+    observedDate: snapshotDate,
+    ebayItemId: listing.ebayItemId,
+    title: listing.title,
+    listingType: listing.listingType,
+    condition: listing.condition,
+    price: listing.price,
+    shipping: listing.shipping,
+    totalPrice: listing.totalPrice,
+    sellerKey: listing.sellerKey,
+    itemWebUrl: listing.itemWebUrl,
+    itemCreationDate: listing.itemCreationDate,
+    itemEndDate: listing.itemEndDate,
+    queryUsed: card.ebayQuery,
+    isCandidateFloor: candidateFloorItemIds.has(listing.ebayItemId),
+  }));
 }
 
 async function getEbayAccessToken(): Promise<string> {
@@ -462,6 +637,11 @@ function getListingRejectionReason(card: Card, item: EbayItemSummary): string | 
     return 'missing_card_identity_terms';
   }
 
+  const conditionReason = getConditionRejectionReason(card, item, normalizedTitle);
+  if (conditionReason) {
+    return conditionReason;
+  }
+
   if (card.marketSegment === 'raw' && containsGradedTerm(normalizedTitle)) {
     return 'graded_listing_in_raw_segment';
   }
@@ -507,6 +687,72 @@ function containsGradedTerm(title: string): boolean {
 
 function containsPsa10Term(title: string): boolean {
   return /(?:^|\s)psa\s*10(?:\s|$)/.test(title);
+}
+
+function getConditionRejectionReason(card: Card, item: EbayItemSummary, normalizedTitle: string): string | null {
+  if (card.marketSegment !== 'raw') {
+    return null;
+  }
+
+  const minimumConditionRank = getMinimumConditionRank(card.condition);
+  if (minimumConditionRank === null) {
+    return null;
+  }
+
+  const detectedConditionRank = getDetectedConditionRank(item, normalizedTitle);
+  if (detectedConditionRank === null) {
+    return null;
+  }
+
+  return detectedConditionRank < minimumConditionRank ? 'listing_condition_below_target' : null;
+}
+
+function getMinimumConditionRank(condition: string): number | null {
+  switch (condition) {
+    case 'near_mint_or_better':
+      return 5;
+    case 'light_played_or_better':
+      return 4;
+    case 'moderately_played_or_better':
+      return 3;
+    case 'heavily_played_or_better':
+      return 2;
+    case 'damaged_or_better':
+      return 1;
+    default:
+      return null;
+  }
+}
+
+function getDetectedConditionRank(item: EbayItemSummary, normalizedTitle: string): number | null {
+  const structuredCondition = normalizeText(item.condition);
+  const conditionText = `${structuredCondition} ${normalizedTitle}`.trim();
+
+  if (!conditionText) {
+    return null;
+  }
+
+  if (matchesAnyPattern(conditionText, NEAR_MINT_PATTERNS)) {
+    return 5;
+  }
+  if (matchesAnyPattern(conditionText, LIGHT_PLAYED_PATTERNS)) {
+    return 4;
+  }
+  if (matchesAnyPattern(conditionText, MODERATELY_PLAYED_PATTERNS)) {
+    return 3;
+  }
+  if (matchesAnyPattern(conditionText, HEAVILY_PLAYED_PATTERNS)) {
+    return 2;
+  }
+  if (matchesAnyPattern(conditionText, DAMAGED_PATTERNS)) {
+    return 1;
+  }
+
+  return null;
+}
+
+function matchesAnyPattern(value: string, patterns: RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(value));
 }
 
 function collectAspectValues(detail: EbayItemDetail): Map<string, string> {
@@ -647,6 +893,8 @@ const BLOCKED_ACCESSORY_PATTERNS = [
   /\bcard saver\b/,
   /\bdisplay case\b/,
   /\bdisplay stand\b/,
+  /\bfor display\b/,
+  /\bdisplay only\b/,
   /\bextended art\b/,
   /\bextended artwork\b/,
   /\bstand only\b/,
@@ -661,6 +909,24 @@ const BLOCKED_ACCESSORY_PATTERNS = [
   /\bsticker\b/,
   /\bmagnet\b/,
   /\bframe\b/,
+  /\bwall art\b/,
+  /\bartwork\b/,
+  /\bposter\b/,
+  /\brug\b/,
+  /\bcarpet\b/,
+  /\bblanket\b/,
+  /\bplaymat\b/,
+  /\bmetal card\b/,
+  /\bmetal\b/,
+  /\bwooden\b/,
+  /\bwood\b/,
+  /\bglitch\b/,
+  /\boripa\b/,
+  /\bmystery\b/,
+  /\bchance\b/,
+  /\bchase pack\b/,
+  /\bgrab\b/,
+  /\bread description\b/,
   /\bfan made\b/,
   /\bdiy\b/,
   /\bfake\b/,
@@ -677,6 +943,51 @@ const BLOCKED_ACCESSORY_PATTERNS = [
 ];
 
 const GRADED_PATTERNS = [/\bpsa\b/, /\bbgs\b/, /\bcgc\b/, /\bsgc\b/, /\bbeckett\b/, /\bgraded\b/, /\bslab\b/];
+
+const NEAR_MINT_PATTERNS = [
+  /\bnear mint\b/,
+  /\bnm\b/,
+  /\bnm mt\b/,
+  /\bnm m\b/,
+  /\bnm mint\b/,
+  /\bnmmt\b/,
+  /\bnm\-mt\b/,
+  /\bmint\b/,
+];
+
+const LIGHT_PLAYED_PATTERNS = [
+  /\blight played\b/,
+  /\blightly played\b/,
+  /\blp\b/,
+  /\bvlp\b/,
+  /\bvery lightly played\b/,
+  /\bslight wear\b/,
+];
+
+const MODERATELY_PLAYED_PATTERNS = [
+  /\bmoderately played\b/,
+  /\bmp\b/,
+  /\bplayed\b/,
+  /\bpl\b/,
+  /\bgood\b/,
+  /\bgd\b/,
+];
+
+const HEAVILY_PLAYED_PATTERNS = [
+  /\bheavily played\b/,
+  /\bhp\b/,
+  /\bpoor\b/,
+];
+
+const DAMAGED_PATTERNS = [
+  /\bdamaged\b/,
+  /\bdmg\b/,
+  /\bcrease\b/,
+  /\bcreased\b/,
+  /\bbent\b/,
+  /\btear\b/,
+  /\btorn\b/,
+];
 
 const GENERIC_NAME_TOKENS = new Set(['pokemon', 'one', 'piece', 'tcg', 'card']);
 

@@ -4,6 +4,7 @@ export interface Card {
   language: string;
   productType: string;
   marketSegment: string;
+  condition: string;
   name: string;
   setName: string;
   cardNumber: string;
@@ -13,17 +14,49 @@ export interface Card {
   tags: string[];
 }
 
+export type ListingType = 'BIN' | 'AUCTION';
+export type SnapshotSource = 'live' | 'backfill' | 'fixture';
+
+export interface EbayListingSample {
+  cardId: number;
+  observedAt: string;
+  observedDate: string;
+  ebayItemId: string;
+  title: string;
+  listingType: ListingType;
+  condition: string | null;
+  price: number;
+  shipping: number;
+  totalPrice: number;
+  sellerKey: string | null;
+  itemWebUrl: string | null;
+  itemCreationDate: string | null;
+  itemEndDate: string | null;
+  queryUsed: string;
+  isCandidateFloor: boolean;
+}
+
 export interface EbaySnapshot {
   cardId: number;
   snapshotDate: string;
+  snapshotSource: SnapshotSource;
   floorBin: number | null;
   floorBinCount: number;
   totalBinCount: number;
   auctionCount: number;
   medianAuctionBidCount: number | null;
   medianAuctionCurrentPrice: number | null;
+  marketPriceEstimate: number | null;
+  marketPriceMethod: string | null;
+  floorQualityScore: number;
+  sampledBinCount: number;
+  sampledAuctionCount: number;
+  sellerConcentrationTop3Pct: number | null;
+  freshLowCount24h: number;
+  newBinCount24h: number;
   queryUsed: string;
   rawPayload: unknown;
+  listingSamples: EbayListingSample[];
 }
 
 export interface ListingDebugEntry {
@@ -54,6 +87,10 @@ export interface LatestListingDebug {
 export interface SignalSnapshot {
   cardId: number;
   signalDate: string;
+  marketNow: number | null;
+  targetBuy80: number | null;
+  targetBuy85: number | null;
+  targetBuy90: number | null;
   ebayFloorChange7dPct: number | null;
   ebayFloorChange30dPct: number | null;
   inventoryChange7dPct: number | null;
@@ -63,5 +100,14 @@ export interface SignalSnapshot {
   volatility7dPct: number | null;
   trendScore: number;
   localLagScore: number;
+  confidenceScore: number;
+  sustainedMoveScore: number;
+  inventorySqueezeScore: number;
+  auctionLagScore: number;
+  absorptionScore: number;
+  stabilityScore: number;
+  queryConfidenceScore: number;
+  rankScore: number;
+  reasonCodes: string[];
   spikeFlag: boolean;
 }

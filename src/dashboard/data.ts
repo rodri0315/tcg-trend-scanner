@@ -26,6 +26,7 @@ export interface OpportunityRow {
   game: string;
   language: string;
   marketSegment: string;
+  condition: string;
   name: string;
   setName: string;
   cardNumber: string;
@@ -46,6 +47,7 @@ export interface WatchlistCard {
   game: string;
   language: string;
   marketSegment: string;
+  condition: string;
   name: string;
   setName: string;
   cardNumber: string;
@@ -74,6 +76,7 @@ export interface CardDetail {
   game: string;
   language: string;
   marketSegment: string;
+  condition: string;
   productType: string;
   name: string;
   setName: string;
@@ -154,6 +157,7 @@ export async function getLatestOpportunities(
     game: string;
     language: string;
     market_segment: string;
+    condition: string;
     name: string;
     set_name: string;
     card_number: string;
@@ -174,6 +178,7 @@ export async function getLatestOpportunities(
         c.game,
         c.language,
         c.market_segment,
+        c.condition,
         c.name,
         c.set_name,
         c.card_number,
@@ -205,6 +210,7 @@ export async function getLatestOpportunities(
     game: row.game,
     language: row.language,
     marketSegment: row.market_segment,
+    condition: row.condition,
     name: row.name,
     setName: row.set_name,
     cardNumber: row.card_number,
@@ -228,6 +234,7 @@ export async function getWatchlistCards(filters: DashboardFilters): Promise<Watc
     game: string;
     language: string;
     market_segment: string;
+    condition: string;
     name: string;
     set_name: string;
     card_number: string;
@@ -245,6 +252,7 @@ export async function getWatchlistCards(filters: DashboardFilters): Promise<Watc
         c.game,
         c.language,
         c.market_segment,
+        c.condition,
         c.name,
         c.set_name,
         c.card_number,
@@ -281,6 +289,7 @@ export async function getWatchlistCards(filters: DashboardFilters): Promise<Watc
     game: row.game,
     language: row.language,
     marketSegment: row.market_segment,
+    condition: row.condition,
     name: row.name,
     setName: row.set_name,
     cardNumber: row.card_number,
@@ -301,6 +310,7 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
     language: string;
     product_type: string;
     market_segment: string;
+    condition: string;
     name: string;
     set_name: string;
     card_number: string;
@@ -316,6 +326,7 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
         language,
         product_type,
         market_segment,
+        condition,
         name,
         set_name,
         card_number,
@@ -391,6 +402,7 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
     game: row.game,
     language: row.language,
     marketSegment: row.market_segment,
+    condition: row.condition,
     productType: row.product_type,
     name: row.name,
     setName: row.set_name,
@@ -563,6 +575,8 @@ function buildKeptGroup(
 
   if (useCurrentBidPrice) {
     entries.sort((left, right) => compareDaysLeft(left.daysLeft, right.daysLeft));
+  } else {
+    entries.sort((left, right) => compareNullablePrice(left.price, right.price));
   }
 
   return {
@@ -689,6 +703,22 @@ function extractDaysLeft(value: unknown): number | null {
 }
 
 function compareDaysLeft(left: number | null, right: number | null): number {
+  if (left === null && right === null) {
+    return 0;
+  }
+
+  if (left === null) {
+    return 1;
+  }
+
+  if (right === null) {
+    return -1;
+  }
+
+  return left - right;
+}
+
+function compareNullablePrice(left: number | null, right: number | null): number {
   if (left === null && right === null) {
     return 0;
   }
