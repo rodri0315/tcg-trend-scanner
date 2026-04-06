@@ -10,6 +10,7 @@ export async function createCardAction(formData: FormData): Promise<void> {
   const language = getRequiredString(formData, 'language');
   const productType = getRequiredString(formData, 'productType');
   const marketSegment = getRequiredString(formData, 'marketSegment');
+  const condition = getRequiredString(formData, 'condition');
   const name = getRequiredString(formData, 'name');
   const setName = getRequiredString(formData, 'setName');
   const cardNumber = getRequiredString(formData, 'cardNumber');
@@ -26,6 +27,7 @@ export async function createCardAction(formData: FormData): Promise<void> {
     language,
     productType,
     marketSegment,
+    condition,
     name,
     setName,
     cardNumber,

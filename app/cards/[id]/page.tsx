@@ -45,7 +45,7 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
       <section className="heroPanel section--narrow">
         <div>
           <p className="eyebrow">
-            {card.game} · {card.language} · {card.marketSegment} · {card.productType}
+            {card.game} · {card.language} · {card.marketSegment} · {labelizeCondition(card.condition)} · {card.productType}
           </p>
           <h2>
             {card.name} {card.cardNumber}
@@ -220,6 +220,10 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
       </section>
     </DashboardShell>
   );
+}
+
+function labelizeCondition(value: string): string {
+  return value.replace(/_or_better$/, '+').replace(/_/g, ' ');
 }
 
 function formatDaysLeft(daysLeft: number | null): string {

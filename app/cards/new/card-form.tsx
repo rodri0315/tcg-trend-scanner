@@ -8,6 +8,14 @@ const GAMES = ['pokemon', 'one_piece'];
 const LANGUAGES = ['english', 'japanese'];
 const PRODUCT_TYPES = ['single'];
 const MARKET_SEGMENTS = ['raw', 'psa_10'];
+const CONDITION_OPTIONS = [
+  { value: 'near_mint_or_better', label: 'Near Mint or better' },
+  { value: 'light_played_or_better', label: 'Light Played or better' },
+  { value: 'moderately_played_or_better', label: 'Moderately Played or better' },
+  { value: 'heavily_played_or_better', label: 'Heavily Played or better' },
+  { value: 'damaged_or_better', label: 'Any playable condition' },
+  { value: 'graded', label: 'Graded only' },
+];
 const VARIANT_PRESETS: Record<
   string,
   Array<{ label: string; variant: string; rarity?: string; queryTerms?: string[]; tags?: string[] }>
@@ -36,6 +44,7 @@ export function CardForm() {
   const [language, setLanguage] = useState('english');
   const [productType, setProductType] = useState('single');
   const [marketSegment, setMarketSegment] = useState('raw');
+  const [condition, setCondition] = useState('near_mint_or_better');
   const [name, setName] = useState('');
   const [cardSetName, setCardSetName] = useState('');
   const [cardNumber, setCardNumber] = useState('');
@@ -52,16 +61,21 @@ export function CardForm() {
       return;
     }
 
-    setEbayQuery(buildDefaultQuery({ game, language, marketSegment, name, setName: cardSetName, cardNumber, variant }));
-  }, [cardNumber, cardSetName, game, language, marketSegment, name, queryEdited, variant]);
+    setEbayQuery(buildDefaultQuery({ game, language, marketSegment, condition, name, setName: cardSetName, cardNumber, variant }));
+  }, [cardNumber, cardSetName, condition, game, language, marketSegment, name, queryEdited, variant]);
 
   useEffect(() => {
     if (tagsEdited) {
       return;
     }
 
-    setTags(buildDefaultTags({ game, language, marketSegment, variant, name }));
-  }, [game, language, marketSegment, name, tagsEdited, variant]);
+    setTags(buildDefaultTags({ game, language, marketSegment, condition, variant, name }));
+  }, [condition, game, language, marketSegment, name, tagsEdited, variant]);
+
+  useEffect(() => {
+    setCondition(marketSegment === 'psa_10' ? 'graded' : 'near_mint_or_better');
+    setQueryEdited(false);
+  }, [marketSegment]);
 
   return (
     <form action={createCardAction} className="cardForm">
@@ -132,6 +146,25 @@ export function CardForm() {
             {MARKET_SEGMENTS.map((option) => (
               <option key={option} value={option}>
                 {option}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Condition
+          <select
+            name="condition"
+            value={condition}
+            onChange={(event) => {
+              setCondition(event.target.value);
+              setQueryEdited(false);
+            }}
+            required
+          >
+            {CONDITION_OPTIONS.filter((option) => (marketSegment === 'psa_10' ? option.value === 'graded' : option.value !== 'graded')).map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
@@ -212,7 +245,7 @@ export function CardForm() {
                   if (preset.rarity) {
                     setRarity(preset.rarity);
                   }
-                  setTags(buildDefaultTags({ game, language, marketSegment, variant: preset.variant, name, presetTags: preset.tags }));
+                  setTags(buildDefaultTags({ game, language, marketSegment, condition, variant: preset.variant, name, presetTags: preset.tags }));
                   setTagsEdited(false);
                   setQueryEdited(false);
                   setEbayQuery(
@@ -220,6 +253,7 @@ export function CardForm() {
                       game,
                       language,
                       marketSegment,
+                      condition,
                       name,
                       setName: cardSetName,
                       cardNumber,
@@ -267,7 +301,7 @@ export function CardForm() {
               className="textLink queryReset"
               onClick={() => {
                 setEbayQuery(
-                  buildDefaultQuery({ game, language, marketSegment, name, setName: cardSetName, cardNumber, variant }),
+                  buildDefaultQuery({ game, language, marketSegment, condition, name, setName: cardSetName, cardNumber, variant }),
                 );
                 setQueryEdited(false);
               }}
@@ -278,7 +312,7 @@ export function CardForm() {
               type="button"
               className="textLink queryReset"
               onClick={() => {
-                setTags(buildDefaultTags({ game, language, marketSegment, variant, name }));
+                setTags(buildDefaultTags({ game, language, marketSegment, condition, variant, name }));
                 setTagsEdited(false);
               }}
             >
@@ -304,6 +338,7 @@ function buildDefaultQuery(input: {
   game: string;
   language: string;
   marketSegment: string;
+  condition: string;
   name: string;
   setName: string;
   cardNumber: string;
@@ -319,7 +354,7 @@ function buildDefaultQuery(input: {
   const gamePrefix = input.game === 'one_piece' ? 'One Piece' : '';
   const languageTerm = getLanguageTerm(input.game, input.language);
   const gradeTerm = input.marketSegment === 'psa_10' ? 'PSA 10' : '';
-  const exclusions = getDefaultExclusions(input.game, input.language, input.marketSegment);
+  const exclusions = getDefaultExclusions(input.game, input.language, input.marketSegment, input.condition);
 
   return [gamePrefix, baseQuery, languageTerm, gradeTerm, exclusions].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 }
@@ -342,6 +377,7 @@ function buildDefaultTags(input: {
   game: string;
   language: string;
   marketSegment: string;
+  condition: string;
   variant: string;
   name: string;
   presetTags?: string[];
@@ -352,6 +388,7 @@ function buildDefaultTags(input: {
   tags.add(normalizedGame);
   tags.add(input.language);
   tags.add(input.marketSegment === 'psa_10' ? 'psa-10' : input.marketSegment);
+  tags.add(input.condition.replace(/_or_better$/, '').replace(/_/g, '-'));
 
   const preset = input.presetTags?.length ? { tags: input.presetTags } : findVariantPreset(input.game, input.variant);
   for (const tag of preset?.tags ?? []) {
@@ -397,7 +434,7 @@ function getLanguageTerm(game: string, language: string): string {
   return '';
 }
 
-function getDefaultExclusions(game: string, language: string, marketSegment: string): string {
+function getDefaultExclusions(game: string, language: string, marketSegment: string, condition: string): string {
   const exclusions: string[] = [];
 
   if (language === 'english') {
@@ -412,6 +449,16 @@ function getDefaultExclusions(game: string, language: string, marketSegment: str
     exclusions.push('-psa', '-bgs', '-cgc', '-sgc', '-beckett');
     if (game === 'pokemon') {
       exclusions.push('-tag');
+    }
+
+    if (condition === 'near_mint_or_better') {
+      exclusions.push('-lp', '-played', '-mp', '-hp', '-damaged');
+    } else if (condition === 'light_played_or_better') {
+      exclusions.push('-mp', '-hp', '-damaged');
+    } else if (condition === 'moderately_played_or_better') {
+      exclusions.push('-hp', '-damaged');
+    } else if (condition === 'heavily_played_or_better') {
+      exclusions.push('-damaged');
     }
   }
 
