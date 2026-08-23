@@ -25,13 +25,15 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
     notFound();
   }
 
-  const floorSeries = card.history.map((point) => point.floorBin);
+  const activeAskSeries = card.history.map((point) => point.activeAskReference);
   const trendSeries = card.history.map((point) => point.trendScore);
   const heroListing = card.latestListingDebug?.fixedPriceKept.entries.find((entry) => entry.imageUrl !== null) ?? null;
   const ebaySearchUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(card.ebayQuery)}`;
   const headerHelp: Array<{ label: string; help: string }> = [
     { label: 'Date', help: 'Snapshot day for this card. We use these daily points to compare short-term momentum and inventory changes.' },
-    { label: 'Floor', help: 'Lowest filtered Buy It Now total on eBay, including shipping. This is our quickest read on the live asking floor.' },
+    { label: 'Ask range', help: 'Low credible cluster of active Buy It Now asking prices, including shipping. These are seller asks, not confirmed sales.' },
+    { label: 'Liquidity', help: 'Observed liquidity score from listing absorption, auction participation, seller breadth, listing depth, and floor reliability.' },
+    { label: 'Collector max', help: 'Maximum acquisition price that meets the configured net ROI after the liquidity and popularity-adjusted collector negotiation.' },
     { label: 'Listings', help: 'Count of filtered Buy It Now listings that still look like the tracked card. Falling supply can support a bullish move.' },
     { label: 'Auctions', help: 'Count of filtered auction listings for the card. Rising auction volume can signal growing market attention and price discovery.' },
     { label: 'Median auction', help: 'Median current auction price, including shipping, from the filtered auction set. We compare this against the floor to spot lag or confirmation.' },
@@ -45,7 +47,7 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
       <section className="heroPanel section--narrow">
         <div>
           <p className="eyebrow">
-            {card.game} · {card.language} · {card.marketSegment} · {labelizeCondition(card.condition)} · {card.productType}
+            {card.game} · {card.language} · {card.marketSegment} · {labelizeCondition(card.condition)} · {card.productType} · {card.popularityTier} popularity
           </p>
           <h2>
             {card.name} {card.cardNumber}
@@ -89,11 +91,12 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
         <article className="panel panel--purple">
           <div className="sectionHead">
             <div>
-              <p className="eyebrow">Floor history</p>
-              <h3>Recent eBay floor movement</h3>
+              <p className="eyebrow">Active ask history</p>
+              <h3>Seller asking-price reference</h3>
             </div>
           </div>
-          <Sparkline values={floorSeries} />
+          <Sparkline values={activeAskSeries} />
+          <p className="subtle">Derived from active BIN listings. This is not a completed-sale price.</p>
         </article>
 
         <article className="panel panel--teal">
@@ -139,7 +142,7 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
             <tbody>
               {card.history.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="emptyTableCell">
+                  <td colSpan={10} className="emptyTableCell">
                     No historical snapshots yet for this card.
                   </td>
                 </tr>
@@ -147,7 +150,9 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
                 card.history.map((point) => (
                   <tr key={point.snapshotDate}>
                     <td>{point.snapshotDate}</td>
-                    <td>{point.floorBin === null ? 'n/a' : `$${point.floorBin.toFixed(2)}`}</td>
+                    <td>{formatCurrencyRange(point.activeAskLow, point.activeAskHigh)}</td>
+                    <td>{point.liquidityTier ?? 'n/a'}{point.liquidityScore === null ? '' : ` ${point.liquidityScore.toFixed(0)}`}</td>
+                    <td>{point.maxBuyPrice === null ? 'n/a' : `$${point.maxBuyPrice.toFixed(2)}`}</td>
                     <td>{point.totalBinCount}</td>
                     <td>{point.auctionCount}</td>
                     <td>{point.medianAuctionCurrentPrice === null ? 'n/a' : `$${point.medianAuctionCurrentPrice.toFixed(2)}`}</td>
@@ -240,4 +245,16 @@ function formatDaysLeft(daysLeft: number | null): string {
   }
 
   return `${daysLeft} days left`;
+}
+
+function formatCurrencyRange(low: number | null, high: number | null): string {
+  if (low === null && high === null) {
+    return 'n/a';
+  }
+
+  if (low === null || high === null || low === high) {
+    return `$${(low ?? high)?.toFixed(2)}`;
+  }
+
+  return `$${low.toFixed(2)}–$${high.toFixed(2)}`;
 }

@@ -27,12 +27,26 @@ export interface OpportunityRow {
   language: string;
   marketSegment: string;
   condition: string;
+  popularityTier: string;
   name: string;
   setName: string;
   cardNumber: string;
   variant: string;
   tags: string[];
   ebayFloor: number | null;
+  activeAskLow: number | null;
+  activeAskHigh: number | null;
+  activeAskReference: number | null;
+  activeAskSellerCount: number;
+  estimatedNetExit: number | null;
+  maxBuyPrice: number | null;
+  collectorMaxBuyLow: number | null;
+  collectorMaxBuyHigh: number | null;
+  vendorMaxBuyPrice: number | null;
+  liquidityScore: number;
+  liquidityTier: string;
+  collectorDiscountPct: number;
+  targetNetRoiPct: number | null;
   totalBinCount: number;
   auctionCount: number;
   ebayFloorChange7dPct: number | null;
@@ -48,6 +62,7 @@ export interface WatchlistCard {
   language: string;
   marketSegment: string;
   condition: string;
+  popularityTier: string;
   name: string;
   setName: string;
   cardNumber: string;
@@ -56,13 +71,26 @@ export interface WatchlistCard {
   lastSignalDate: string | null;
   trendScore: number | null;
   localLagScore: number | null;
+  liquidityScore: number | null;
+  liquidityTier: string | null;
   floorBin: number | null;
+  activeAskLow: number | null;
+  activeAskHigh: number | null;
   totalBinCount: number | null;
 }
 
 export interface CardHistoryPoint {
   snapshotDate: string;
   floorBin: number | null;
+  activeAskLow: number | null;
+  activeAskHigh: number | null;
+  activeAskReference: number | null;
+  activeAskSellerCount: number;
+  estimatedNetExit: number | null;
+  maxBuyPrice: number | null;
+  liquidityScore: number | null;
+  liquidityTier: string | null;
+  collectorDiscountPct: number | null;
   totalBinCount: number;
   auctionCount: number;
   medianAuctionCurrentPrice: number | null;
@@ -77,6 +105,7 @@ export interface CardDetail {
   language: string;
   marketSegment: string;
   condition: string;
+  popularityTier: string;
   productType: string;
   name: string;
   setName: string;
@@ -158,12 +187,26 @@ export async function getLatestOpportunities(
     language: string;
     market_segment: string;
     condition: string;
+    popularity_tier: string;
     name: string;
     set_name: string;
     card_number: string;
     variant: string;
     tags: string[];
     ebay_floor: string | null;
+    active_ask_low: string | null;
+    active_ask_high: string | null;
+    active_ask_reference: string | null;
+    active_ask_seller_count: number;
+    estimated_net_exit: string | null;
+    max_buy_price: string | null;
+    collector_max_buy_low: string | null;
+    collector_max_buy_high: string | null;
+    vendor_max_buy_price: string | null;
+    liquidity_score: string;
+    liquidity_tier: string;
+    collector_discount_pct: string;
+    target_net_roi_pct: string | null;
     total_bin_count: number;
     auction_count: number;
     ebay_floor_change_7d_pct: string | null;
@@ -179,12 +222,26 @@ export async function getLatestOpportunities(
         c.language,
         c.market_segment,
         c.condition,
+        c.popularity_tier,
         c.name,
         c.set_name,
         c.card_number,
         c.variant,
         c.tags,
         e.floor_bin as ebay_floor,
+        e.active_ask_low,
+        e.active_ask_high,
+        coalesce(e.active_ask_reference, s.active_ask_reference, s.market_now) as active_ask_reference,
+        coalesce(e.active_ask_seller_count, 0) as active_ask_seller_count,
+        s.estimated_net_exit,
+        s.max_buy_price,
+        s.exit_scenarios #>> '{direct_collector,negotiationRange,conservative,maxBuyPrice}' as collector_max_buy_low,
+        s.exit_scenarios #>> '{direct_collector,negotiationRange,optimistic,maxBuyPrice}' as collector_max_buy_high,
+        s.exit_scenarios -> 'vendor' ->> 'maxBuyPrice' as vendor_max_buy_price,
+        s.liquidity_score,
+        s.liquidity_tier,
+        s.collector_discount_pct,
+        s.target_net_roi_pct,
         coalesce(e.total_bin_count, 0) as total_bin_count,
         coalesce(e.auction_count, 0) as auction_count,
         s.ebay_floor_change_7d_pct,
@@ -211,12 +268,26 @@ export async function getLatestOpportunities(
     language: row.language,
     marketSegment: row.market_segment,
     condition: row.condition,
+    popularityTier: row.popularity_tier,
     name: row.name,
     setName: row.set_name,
     cardNumber: row.card_number,
     variant: row.variant,
     tags: row.tags ?? [],
     ebayFloor: toNullableNumber(row.ebay_floor),
+    activeAskLow: toNullableNumber(row.active_ask_low),
+    activeAskHigh: toNullableNumber(row.active_ask_high),
+    activeAskReference: toNullableNumber(row.active_ask_reference),
+    activeAskSellerCount: row.active_ask_seller_count,
+    estimatedNetExit: toNullableNumber(row.estimated_net_exit),
+    maxBuyPrice: toNullableNumber(row.max_buy_price),
+    collectorMaxBuyLow: toNullableNumber(row.collector_max_buy_low),
+    collectorMaxBuyHigh: toNullableNumber(row.collector_max_buy_high),
+    vendorMaxBuyPrice: toNullableNumber(row.vendor_max_buy_price),
+    liquidityScore: toNumberOrZero(row.liquidity_score),
+    liquidityTier: row.liquidity_tier,
+    collectorDiscountPct: toNumberOrZero(row.collector_discount_pct),
+    targetNetRoiPct: toNullableNumber(row.target_net_roi_pct),
     totalBinCount: row.total_bin_count,
     auctionCount: row.auction_count,
     ebayFloorChange7dPct: toNullableNumber(row.ebay_floor_change_7d_pct),
@@ -235,6 +306,7 @@ export async function getWatchlistCards(filters: DashboardFilters): Promise<Watc
     language: string;
     market_segment: string;
     condition: string;
+    popularity_tier: string;
     name: string;
     set_name: string;
     card_number: string;
@@ -243,7 +315,11 @@ export async function getWatchlistCards(filters: DashboardFilters): Promise<Watc
     last_signal_date: string | null;
     trend_score: string | null;
     local_lag_score: string | null;
+    liquidity_score: string | null;
+    liquidity_tier: string | null;
     floor_bin: string | null;
+    active_ask_low: string | null;
+    active_ask_high: string | null;
     total_bin_count: number | null;
   }>(
     `
@@ -253,6 +329,7 @@ export async function getWatchlistCards(filters: DashboardFilters): Promise<Watc
         c.language,
         c.market_segment,
         c.condition,
+        c.popularity_tier,
         c.name,
         c.set_name,
         c.card_number,
@@ -261,18 +338,22 @@ export async function getWatchlistCards(filters: DashboardFilters): Promise<Watc
         latest_signal.signal_date::text as last_signal_date,
         latest_signal.trend_score,
         latest_signal.local_lag_score,
+        latest_signal.liquidity_score,
+        latest_signal.liquidity_tier,
         latest_market.floor_bin,
+        latest_market.active_ask_low,
+        latest_market.active_ask_high,
         latest_market.total_bin_count
       from cards c
       left join lateral (
-        select s.signal_date, s.trend_score, s.local_lag_score
+        select s.signal_date, s.trend_score, s.local_lag_score, s.liquidity_score, s.liquidity_tier
         from signals_daily s
         where s.card_id = c.id
         order by s.signal_date desc
         limit 1
       ) latest_signal on true
       left join lateral (
-        select e.floor_bin, e.total_bin_count
+        select e.floor_bin, e.active_ask_low, e.active_ask_high, e.total_bin_count
         from ebay_daily e
         where e.card_id = c.id
         order by e.snapshot_date desc
@@ -290,6 +371,7 @@ export async function getWatchlistCards(filters: DashboardFilters): Promise<Watc
     language: row.language,
     marketSegment: row.market_segment,
     condition: row.condition,
+    popularityTier: row.popularity_tier,
     name: row.name,
     setName: row.set_name,
     cardNumber: row.card_number,
@@ -298,7 +380,11 @@ export async function getWatchlistCards(filters: DashboardFilters): Promise<Watc
     lastSignalDate: row.last_signal_date,
     trendScore: toNullableNumber(row.trend_score),
     localLagScore: toNullableNumber(row.local_lag_score),
+    liquidityScore: toNullableNumber(row.liquidity_score),
+    liquidityTier: row.liquidity_tier,
     floorBin: toNullableNumber(row.floor_bin),
+    activeAskLow: toNullableNumber(row.active_ask_low),
+    activeAskHigh: toNullableNumber(row.active_ask_high),
     totalBinCount: row.total_bin_count,
   }));
 }
@@ -311,6 +397,7 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
     product_type: string;
     market_segment: string;
     condition: string;
+    popularity_tier: string;
     name: string;
     set_name: string;
     card_number: string;
@@ -327,6 +414,7 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
         product_type,
         market_segment,
         condition,
+        popularity_tier,
         name,
         set_name,
         card_number,
@@ -349,6 +437,15 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
   const historyResult = await pool.query<{
     snapshot_date: string;
     floor_bin: string | null;
+    active_ask_low: string | null;
+    active_ask_high: string | null;
+    active_ask_reference: string | null;
+    active_ask_seller_count: number;
+    estimated_net_exit: string | null;
+    max_buy_price: string | null;
+    liquidity_score: string | null;
+    liquidity_tier: string | null;
+    collector_discount_pct: string | null;
     total_bin_count: number;
     auction_count: number;
     median_auction_current_price: string | null;
@@ -360,6 +457,15 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
       select
         e.snapshot_date::text as snapshot_date,
         e.floor_bin,
+        e.active_ask_low,
+        e.active_ask_high,
+        coalesce(e.active_ask_reference, e.market_price_estimate, e.floor_bin) as active_ask_reference,
+        coalesce(e.active_ask_seller_count, 0) as active_ask_seller_count,
+        s.estimated_net_exit,
+        s.max_buy_price,
+        s.liquidity_score,
+        s.liquidity_tier,
+        s.collector_discount_pct,
         e.total_bin_count,
         e.auction_count,
         e.median_auction_current_price,
@@ -403,6 +509,7 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
     language: row.language,
     marketSegment: row.market_segment,
     condition: row.condition,
+    popularityTier: row.popularity_tier,
     productType: row.product_type,
     name: row.name,
     setName: row.set_name,
@@ -415,6 +522,15 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
       .map((historyRow) => ({
         snapshotDate: historyRow.snapshot_date,
         floorBin: toNullableNumber(historyRow.floor_bin),
+        activeAskLow: toNullableNumber(historyRow.active_ask_low),
+        activeAskHigh: toNullableNumber(historyRow.active_ask_high),
+        activeAskReference: toNullableNumber(historyRow.active_ask_reference),
+        activeAskSellerCount: historyRow.active_ask_seller_count,
+        estimatedNetExit: toNullableNumber(historyRow.estimated_net_exit),
+        maxBuyPrice: toNullableNumber(historyRow.max_buy_price),
+        liquidityScore: toNullableNumber(historyRow.liquidity_score),
+        liquidityTier: historyRow.liquidity_tier,
+        collectorDiscountPct: toNullableNumber(historyRow.collector_discount_pct),
         totalBinCount: historyRow.total_bin_count,
         auctionCount: historyRow.auction_count,
         medianAuctionCurrentPrice: toNullableNumber(historyRow.median_auction_current_price),

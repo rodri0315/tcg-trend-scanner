@@ -1,3 +1,8 @@
+import type { ExitScenario } from './economics/netOutcome';
+import type { LiquidityTier } from './economics/liquidity';
+
+export type PopularityTier = 'high' | 'standard' | 'niche';
+
 export interface Card {
   id: number;
   game: string;
@@ -5,6 +10,7 @@ export interface Card {
   productType: string;
   marketSegment: string;
   condition: string;
+  popularityTier: PopularityTier;
   name: string;
   setName: string;
   cardNumber: string;
@@ -46,6 +52,10 @@ export interface EbaySnapshot {
   auctionCount: number;
   medianAuctionBidCount: number | null;
   medianAuctionCurrentPrice: number | null;
+  activeAskLow: number | null;
+  activeAskHigh: number | null;
+  activeAskReference: number | null;
+  activeAskSellerCount: number;
   marketPriceEstimate: number | null;
   marketPriceMethod: string | null;
   floorQualityScore: number;
@@ -88,6 +98,17 @@ export interface SignalSnapshot {
   cardId: number;
   signalDate: string;
   marketNow: number | null;
+  activeAskReference: number | null;
+  expectedSalePrice: number | null;
+  estimatedNetExit: number | null;
+  maxBuyPrice: number | null;
+  targetNetRoiPct: number | null;
+  primaryExitChannel: string;
+  exitScenarios: Record<string, ExitScenario>;
+  liquidityScore: number;
+  liquidityConfidenceScore: number;
+  liquidityTier: LiquidityTier;
+  collectorDiscountPct: number;
   targetBuy80: number | null;
   targetBuy85: number | null;
   targetBuy90: number | null;

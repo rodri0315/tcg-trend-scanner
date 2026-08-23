@@ -105,6 +105,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   <span className="pill">{row.game}</span>
                   <span className="pill">{row.language}</span>
                   <span className="pill">{row.marketSegment}</span>
+                  <span className="pill">{row.popularityTier} popularity</span>
                   {row.spikeFlag ? <span className="pill pill--hot">spike</span> : null}
                 </div>
                 <h4>
@@ -123,14 +124,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                     <dd>{row.localLagScore.toFixed(2)}</dd>
                   </div>
                   <div>
-                    <dt>eBay floor</dt>
-                    <dd>{formatCurrency(row.ebayFloor)}</dd>
+                    <dt>Active ask range</dt>
+                    <dd>{formatCurrencyRange(row.activeAskLow, row.activeAskHigh)}</dd>
                   </div>
                   <div>
-                    <dt>Listings</dt>
-                    <dd>{row.totalBinCount}</dd>
+                    <dt>Collector max</dt>
+                    <dd>{formatCurrencyRange(row.collectorMaxBuyLow, row.collectorMaxBuyHigh)}</dd>
                   </div>
                 </dl>
+                <p className="subtle">
+                  {row.liquidityTier} liquidity {row.liquidityScore.toFixed(0)}/100 · {row.collectorDiscountPct.toFixed(0)}% expected collector negotiation · vendor max {formatCurrency(row.vendorMaxBuyPrice)} · asking prices, not confirmed sales
+                </p>
               </Link>
             ))}
           </div>
@@ -146,4 +150,16 @@ function getSingleValue(value: string | string[] | undefined): string | undefine
 
 function formatCurrency(value: number | null): string {
   return value === null ? 'n/a' : `$${value.toFixed(2)}`;
+}
+
+function formatCurrencyRange(low: number | null, high: number | null): string {
+  if (low === null && high === null) {
+    return 'n/a';
+  }
+
+  if (low === null || high === null || low === high) {
+    return formatCurrency(low ?? high);
+  }
+
+  return `${formatCurrency(low)}–${formatCurrency(high)}`;
 }

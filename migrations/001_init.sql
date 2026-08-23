@@ -3,6 +3,8 @@ create table if not exists cards (
   game text not null,
   language text not null,
   product_type text not null default 'single',
+  market_segment text not null default 'raw',
+  popularity_tier text not null default 'standard' check (popularity_tier in ('high', 'standard', 'niche')),
   name text not null,
   set_name text not null,
   card_number text not null,
@@ -12,7 +14,7 @@ create table if not exists cards (
   tags text[] not null default '{}',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (game, language, product_type, name, set_name, card_number, variant)
+  unique (game, language, product_type, market_segment, name, set_name, card_number, variant)
 );
 
 create table if not exists ebay_daily (

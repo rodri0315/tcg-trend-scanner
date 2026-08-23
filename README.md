@@ -34,6 +34,7 @@ Copy `.env.example` to `.env` and fill in:
 - `EBAY_CLIENT_SECRET`
 - `EBAY_VERIFICATION_TOKEN`
 - `APP_BASE_URL`
+- Optional selling-cost assumptions described below
 
 ## Database setup
 Apply [`migrations/001_init.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/001_init.sql) to a fresh database.
@@ -42,6 +43,32 @@ Apply [`migrations/003_local_buy_engine.sql`](/Users/jorgerodriguez/jr/TCG/pokem
 Apply [`migrations/004_listing_sample_unique_per_card.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/004_listing_sample_unique_per_card.sql) to make listing samples idempotent per tracked card.
 Apply [`migrations/005_snapshot_source.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/005_snapshot_source.sql) to separate live history from backfill and fixture data.
 Apply [`migrations/006_card_condition.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/006_card_condition.sql) to add tracked card condition lanes like `near_mint_or_better` and `graded`.
+Apply [`migrations/007_economic_decision_support.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/007_economic_decision_support.sql) to add explicit active-ask ranges, expert popularity tiers, liquidity fields, and auditable net-exit/max-buy scenarios.
+
+## Exit scenarios
+
+Active eBay listings are asking prices, not confirmed sales. The scanner stores a credible low ask range and uses its median as an active-ask reference.
+
+eBay is used for price discovery, while actual exits may happen directly with collectors, through vendors, or occasionally on eBay. The daily signal stores all calculated exit scenarios and uses `direct_collector` as the primary scenario.
+
+Default assumptions are editable through `.env`:
+
+- Direct collector: `EXIT_COLLECTOR_DISCOUNT_PCT=5`
+- Vendor: `EXIT_VENDOR_PAYOUT_PCT=80`
+- Target return: `EXIT_TARGET_NET_ROI_PCT=20`
+- Shared acquisition costs: `EXIT_ACQUISITION_COSTS=0`
+
+The eBay scenario is optional and is only calculated when `EXIT_EBAY_FEE_PCT` is set. Shipping, materials, risk reserve, and fixed costs can be configured separately for each channel; see `.env.example` for the full list.
+
+The calculation is:
+
+```text
+expected exit = active ask reference × channel payout/discount
+net exit = expected sale - percentage costs - fixed selling costs
+max buy = net exit ÷ (1 + target net ROI) - acquisition costs
+```
+
+Every scenario and its complete assumptions are stored with each daily signal so historical recommendations remain auditable when configuration changes.
 
 ## Seed cards
 Starter seed data lives in [`seed/seed_cards.csv`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/seed/seed_cards.csv).
@@ -125,7 +152,11 @@ https://your-app.example.com/api/ebay/marketplace-account-deletion
 
 ## Notes
 - eBay snapshots now keep a thin sample of the lowest active listings for floor quality, seller concentration, and low-end absorption analysis.
+- The dashboard and reports label active listing values as asking-price ranges rather than completed-sale market values.
 - Cards now carry a tracked `condition` lane. Raw defaults to `near_mint_or_better`; graded rows use `graded`.
+- Cards carry an expert-set collector popularity tier (`high`, `standard`, or `niche`); existing and newly seeded cards default to `standard` until reviewed.
+- Liquidity is scored from low-listing disappearance, auction participation, seller breadth, listing depth, floor reliability, and seller concentration. Missing observations reduce liquidity confidence instead of counting as zero demand.
+- The direct-collector exit starts from `EXIT_COLLECTOR_DISCOUNT_PCT` (5% by default), adjusts for observed liquidity and expert popularity, and produces optimistic/expected/conservative maximum-buy prices. Vendor payout remains a separate exit scenario.
 - Snapshot aggregation filters out likely non-card matches by title and suppresses obvious low-price BIN outliers before computing floors and counts, while keeping rejection diagnostics in `raw_payload`.
 - Auction lag now uses only near-end auctions ending within 12 hours and ignores immature current bids below a market-relative floor. If no usable auctions remain, auction lag is treated as unavailable rather than bearish.
 - Signals use 7-day and 30-day eBay lookbacks, estimate a more executable `market_now`, and degrade gracefully when history is not available yet.
