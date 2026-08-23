@@ -8,6 +8,11 @@ const GAMES = ['pokemon', 'one_piece'];
 const LANGUAGES = ['english', 'japanese'];
 const PRODUCT_TYPES = ['single'];
 const MARKET_SEGMENTS = ['raw', 'psa_10'];
+const POPULARITY_OPTIONS = [
+  { value: 'high', label: 'High — broad collector demand' },
+  { value: 'standard', label: 'Standard — normal demand' },
+  { value: 'niche', label: 'Niche — narrower buyer pool' },
+];
 const CONDITION_OPTIONS = [
   { value: 'near_mint_or_better', label: 'Near Mint or better' },
   { value: 'light_played_or_better', label: 'Light Played or better' },
@@ -163,6 +168,17 @@ export function CardForm() {
             required
           >
             {CONDITION_OPTIONS.filter((option) => (marketSegment === 'psa_10' ? option.value === 'graded' : option.value !== 'graded')).map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Collector popularity
+          <select name="popularityTier" defaultValue="standard" required>
+            {POPULARITY_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

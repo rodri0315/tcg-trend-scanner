@@ -5,6 +5,15 @@ import { useEffect, useState } from 'react';
 interface TimelineRow {
   snapshotDate: string;
   floorBin: number | null;
+  activeAskLow: number | null;
+  activeAskHigh: number | null;
+  activeAskReference: number | null;
+  activeAskSellerCount: number;
+  estimatedNetExit: number | null;
+  maxBuyPrice: number | null;
+  liquidityScore: number | null;
+  liquidityTier: string | null;
+  collectorDiscountPct: number | null;
   totalBinCount: number;
   auctionCount: number;
   medianAuctionCurrentPrice: number | null;
@@ -48,7 +57,7 @@ export function MobileTimelineTable({ data }: MobileTimelineTableProps) {
               <div className="timelineRowSummary">
                 <span className="timelineDate">{row.snapshotDate}</span>
                 <span className="timelineFloor">
-                  {row.floorBin === null ? 'n/a' : `$${row.floorBin.toFixed(2)}`}
+                  {formatCurrencyRange(row.activeAskLow, row.activeAskHigh)}
                 </span>
                 {row.spikeFlag && <span className="pill pill--hot">spike</span>}
               </div>
@@ -86,7 +95,7 @@ export function MobileTimelineTable({ data }: MobileTimelineTableProps) {
               <div className="timelineRowSummary">
                 <span className="timelineDate">{row.snapshotDate}</span>
                 <span className="timelineFloor">
-                  {row.floorBin === null ? 'n/a' : `$${row.floorBin.toFixed(2)}`}
+                  {formatCurrencyRange(row.activeAskLow, row.activeAskHigh)}
                 </span>
                 {row.spikeFlag && <span className="pill pill--hot">spike</span>}
               </div>
@@ -108,6 +117,30 @@ export function MobileTimelineTable({ data }: MobileTimelineTableProps) {
             {isExpanded && (
               <div className="timelineRowDetails">
                 <dl className="timelineMetrics">
+                  <div className="timelineMetric">
+                    <dt>Ask reference</dt>
+                    <dd>{formatCurrency(row.activeAskReference)}</dd>
+                  </div>
+                  <div className="timelineMetric">
+                    <dt>Low-range sellers</dt>
+                    <dd>{row.activeAskSellerCount}</dd>
+                  </div>
+                  <div className="timelineMetric">
+                    <dt>Liquidity</dt>
+                    <dd>{row.liquidityTier ?? 'n/a'}{row.liquidityScore === null ? '' : ` ${row.liquidityScore.toFixed(0)}`}</dd>
+                  </div>
+                  <div className="timelineMetric">
+                    <dt>Collector negotiation</dt>
+                    <dd>{row.collectorDiscountPct === null ? 'n/a' : `${row.collectorDiscountPct.toFixed(0)}%`}</dd>
+                  </div>
+                  <div className="timelineMetric">
+                    <dt>Estimated net exit</dt>
+                    <dd>{formatCurrency(row.estimatedNetExit)}</dd>
+                  </div>
+                  <div className="timelineMetric">
+                    <dt>Max buy</dt>
+                    <dd>{formatCurrency(row.maxBuyPrice)}</dd>
+                  </div>
                   <div className="timelineMetric">
                     <dt>Listings</dt>
                     <dd>{row.totalBinCount}</dd>
@@ -140,4 +173,20 @@ export function MobileTimelineTable({ data }: MobileTimelineTableProps) {
       })}
     </div>
   );
+}
+
+function formatCurrency(value: number | null): string {
+  return value === null ? 'n/a' : `$${value.toFixed(2)}`;
+}
+
+function formatCurrencyRange(low: number | null, high: number | null): string {
+  if (low === null && high === null) {
+    return 'n/a';
+  }
+
+  if (low === null || high === null || low === high) {
+    return formatCurrency(low ?? high);
+  }
+
+  return `${formatCurrency(low)}–${formatCurrency(high)}`;
 }

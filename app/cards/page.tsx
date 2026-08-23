@@ -66,7 +66,8 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
                 <th>Game</th>
                 <th>Language</th>
                 <th>Market</th>
-                <th>Latest floor</th>
+                <th>Liquidity</th>
+                <th>Active ask range</th>
                 <th>Trend</th>
                 <th>Local lag</th>
                 <th>Listings</th>
@@ -81,12 +82,14 @@ export default async function CardsPage({ searchParams }: CardsPageProps) {
                     </Link>
                     <div className="subtle">
                       {card.setName} · {card.variant} · {labelizeCondition(card.condition)}
+                      {' · '}{card.popularityTier} popularity
                     </div>
                   </td>
                   <td>{card.game}</td>
                   <td>{card.language}</td>
                   <td>{card.marketSegment}</td>
-                  <td>{card.floorBin === null ? 'n/a' : `$${card.floorBin.toFixed(2)}`}</td>
+                  <td>{card.liquidityTier ?? 'n/a'}{card.liquidityScore === null ? '' : ` ${card.liquidityScore.toFixed(0)}`}</td>
+                  <td>{formatCurrencyRange(card.activeAskLow, card.activeAskHigh)}</td>
                   <td>{card.trendScore === null ? 'n/a' : card.trendScore.toFixed(2)}</td>
                   <td>{card.localLagScore === null ? 'n/a' : card.localLagScore.toFixed(2)}</td>
                   <td>{card.totalBinCount ?? 0}</td>
@@ -106,4 +109,16 @@ function getSingleValue(value: string | string[] | undefined): string | undefine
 
 function labelizeCondition(value: string): string {
   return value.replace(/_or_better$/, '+').replace(/_/g, ' ');
+}
+
+function formatCurrencyRange(low: number | null, high: number | null): string {
+  if (low === null && high === null) {
+    return 'n/a';
+  }
+
+  if (low === null || high === null || low === high) {
+    return `$${(low ?? high)?.toFixed(2)}`;
+  }
+
+  return `$${low.toFixed(2)}–$${high.toFixed(2)}`;
 }

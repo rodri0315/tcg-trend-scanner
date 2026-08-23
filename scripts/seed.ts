@@ -11,6 +11,7 @@ interface SeedRow {
   product_type?: string;
   market_segment?: string;
   condition?: string;
+  popularity_tier?: 'high' | 'standard' | 'niche';
   name: string;
   set: string;
   number: string;
@@ -42,6 +43,7 @@ async function main() {
             product_type,
             market_segment,
             condition,
+            popularity_tier,
             name,
             set_name,
             card_number,
@@ -51,9 +53,10 @@ async function main() {
             tags,
             updated_at
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
           on conflict (game, language, product_type, market_segment, condition, name, set_name, card_number, variant) do update set
             rarity = excluded.rarity,
+            popularity_tier = excluded.popularity_tier,
             ebay_query = excluded.ebay_query,
             tags = excluded.tags,
             updated_at = now()
@@ -64,6 +67,7 @@ async function main() {
           row.product_type?.trim() || 'single',
           row.market_segment?.trim() || 'raw',
           row.condition?.trim() || (row.market_segment?.trim() === 'psa_10' ? 'graded' : 'near_mint_or_better'),
+          row.popularity_tier?.trim() || 'standard',
           row.name,
           row.set,
           row.number,

@@ -1,5 +1,5 @@
 import { pool } from '../db/pool';
-import type { Card } from '../types';
+import type { Card, PopularityTier } from '../types';
 
 export interface CreateCardInput {
   game: string;
@@ -7,6 +7,7 @@ export interface CreateCardInput {
   productType: string;
   marketSegment: string;
   condition: string;
+  popularityTier: PopularityTier;
   name: string;
   setName: string;
   cardNumber: string;
@@ -24,6 +25,7 @@ export async function getCards(): Promise<Card[]> {
     product_type: string;
     market_segment: string;
     condition: string;
+    popularity_tier: PopularityTier;
     name: string;
     set_name: string;
     card_number: string;
@@ -39,6 +41,7 @@ export async function getCards(): Promise<Card[]> {
       product_type,
       market_segment,
       condition,
+      popularity_tier,
       name,
       set_name,
       card_number,
@@ -57,6 +60,7 @@ export async function getCards(): Promise<Card[]> {
     productType: row.product_type,
     marketSegment: row.market_segment,
     condition: row.condition,
+    popularityTier: row.popularity_tier,
     name: row.name,
     setName: row.set_name,
     cardNumber: row.card_number,
@@ -76,6 +80,7 @@ export async function createCard(input: CreateCardInput): Promise<number> {
         product_type,
         market_segment,
         condition,
+        popularity_tier,
         name,
         set_name,
         card_number,
@@ -85,7 +90,7 @@ export async function createCard(input: CreateCardInput): Promise<number> {
         tags,
         updated_at
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
       returning id
     `,
     [
@@ -94,6 +99,7 @@ export async function createCard(input: CreateCardInput): Promise<number> {
       input.productType,
       input.marketSegment,
       input.condition,
+      input.popularityTier,
       input.name,
       input.setName,
       input.cardNumber,

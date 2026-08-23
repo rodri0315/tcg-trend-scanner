@@ -1,4 +1,7 @@
 import { pool } from '../db/pool';
+import { config } from '../config';
+import { assessLiquidity, calculateCollectorDiscountRange } from '../economics/liquidity';
+import { calculateExitScenarios, calculateNetOutcome } from '../economics/netOutcome';
 import type { Card, SignalSnapshot } from '../types';
 import { clamp, percentChange, round } from '../utils/math';
 
@@ -8,7 +11,12 @@ interface HistoricalSnapshotRow {
   floor_bin_count: number | null;
   total_bin_count: number | null;
   auction_count: number | null;
+  median_auction_bid_count: number | null;
   median_auction_current_price: number | null;
+  active_ask_low: number | null;
+  active_ask_high: number | null;
+  active_ask_reference: number | null;
+  active_ask_seller_count: number | null;
   market_price_estimate: number | null;
   floor_quality_score: number | null;
   sampled_bin_count: number | null;
@@ -35,7 +43,7 @@ export async function calculateDailySignals(cards: Card[], signalDate: string): 
       continue;
     }
 
-    const currentReferencePrice = current.market_price_estimate ?? current.floor_bin;
+    const currentReferencePrice = current.active_ask_reference ?? current.market_price_estimate ?? current.floor_bin;
     const sevenDayDate = shiftDate(signalDate, 7);
     const thirtyDayDate = shiftDate(signalDate, 30);
     const previous7d = await getClosestHistoricalSnapshot(card.id, sevenDayDate);
@@ -43,8 +51,10 @@ export async function calculateDailySignals(cards: Card[], signalDate: string): 
     const trailing7d = await getTrailingReferenceSeries(card.id, signalDate, 7);
     const absorption = await getListingAbsorptionStats(card.id, signalDate);
 
-    const previous7dReferencePrice = previous7d?.market_price_estimate ?? previous7d?.floor_bin ?? null;
-    const previous30dReferencePrice = previous30d?.market_price_estimate ?? previous30d?.floor_bin ?? null;
+    const previous7dReferencePrice =
+      previous7d?.active_ask_reference ?? previous7d?.market_price_estimate ?? previous7d?.floor_bin ?? null;
+    const previous30dReferencePrice =
+      previous30d?.active_ask_reference ?? previous30d?.market_price_estimate ?? previous30d?.floor_bin ?? null;
     const ebayFloorChange7dPct = percentChange(currentReferencePrice, previous7dReferencePrice);
     const ebayFloorChange30dPct = percentChange(currentReferencePrice, previous30dReferencePrice);
     const inventoryChange7dPct = percentChange(current.total_bin_count, previous7d?.total_bin_count ?? null);
@@ -110,11 +120,71 @@ export async function calculateDailySignals(cards: Card[], signalDate: string): 
       (ebayFloorChange7dPct ?? 0) >= 14 &&
       (ebayFloorChange30dPct ?? 0) <= ((ebayFloorChange7dPct ?? 0) * 1.2) &&
       (volatility7dPct ?? 0) >= 12;
+    const liquidity = assessLiquidity({
+      absorbedRatioPct: absorption.absorbedRatioPct,
+      auctionCount: current.auction_count,
+      medianAuctionBidCount: current.median_auction_bid_count,
+      activeAskSellerCount: current.active_ask_seller_count,
+      sampledBinCount: current.sampled_bin_count,
+      floorQualityScore: current.floor_quality_score,
+      sellerConcentrationTop3Pct: current.seller_concentration_top3_pct,
+    });
+    const collectorProfile = config.exitProfiles.find((profile) => profile.code === 'direct_collector') ?? null;
+    const collectorDiscountRange = calculateCollectorDiscountRange(
+      collectorProfile?.exitDiscountPct ?? 5,
+      liquidity.tier,
+      card.popularityTier,
+    );
+    const adjustedExitProfiles = config.exitProfiles.map((profile) =>
+      profile.code === 'direct_collector'
+        ? { ...profile, exitDiscountPct: collectorDiscountRange.expectedPct }
+        : profile,
+    );
+    const exitScenarios = calculateExitScenarios(currentReferencePrice, adjustedExitProfiles);
+    const collectorScenario = exitScenarios.direct_collector;
+    if (collectorScenario && collectorProfile) {
+      const optimistic = calculateNetOutcome(currentReferencePrice, {
+        ...collectorProfile,
+        exitDiscountPct: collectorDiscountRange.optimisticPct,
+      });
+      const conservative = calculateNetOutcome(currentReferencePrice, {
+        ...collectorProfile,
+        exitDiscountPct: collectorDiscountRange.conservativePct,
+      });
+      if (optimistic && conservative) {
+        collectorScenario.negotiationRange = {
+          optimistic,
+          expected: {
+            expectedSalePrice: collectorScenario.expectedSalePrice,
+            estimatedNetExit: collectorScenario.estimatedNetExit,
+            maxBuyPrice: collectorScenario.maxBuyPrice,
+          },
+          conservative,
+          discountPcts: {
+            optimistic: collectorDiscountRange.optimisticPct,
+            expected: collectorDiscountRange.expectedPct,
+            conservative: collectorDiscountRange.conservativePct,
+          },
+        };
+      }
+    }
+    const primaryExitScenario = exitScenarios[config.primaryExitChannel] ?? null;
 
     signals.push({
       cardId: card.id,
       signalDate,
       marketNow: currentReferencePrice,
+      activeAskReference: currentReferencePrice,
+      expectedSalePrice: primaryExitScenario?.expectedSalePrice ?? null,
+      estimatedNetExit: primaryExitScenario?.estimatedNetExit ?? null,
+      maxBuyPrice: primaryExitScenario?.maxBuyPrice ?? null,
+      targetNetRoiPct: primaryExitScenario?.targetNetRoiPct ?? null,
+      primaryExitChannel: config.primaryExitChannel,
+      exitScenarios,
+      liquidityScore: liquidity.score,
+      liquidityConfidenceScore: liquidity.confidenceScore,
+      liquidityTier: liquidity.tier,
+      collectorDiscountPct: collectorDiscountRange.expectedPct,
       targetBuy80: currentReferencePrice === null ? null : round(currentReferencePrice * 0.8),
       targetBuy85: currentReferencePrice === null ? null : round(currentReferencePrice * 0.85),
       targetBuy90: currentReferencePrice === null ? null : round(currentReferencePrice * 0.9),
@@ -144,6 +214,10 @@ export async function calculateDailySignals(cards: Card[], signalDate: string): 
         confidenceScore,
         queryConfidenceScore,
         current,
+        liquidityTier: liquidity.tier,
+        liquidityConfidenceScore: liquidity.confidenceScore,
+        collectorDiscountPct: collectorDiscountRange.expectedPct,
+        popularityTier: card.popularityTier,
         distortedHistory,
       }),
       spikeFlag,
@@ -162,7 +236,12 @@ async function getHistoricalSnapshot(cardId: number, snapshotDate: string): Prom
         e.floor_bin_count,
         e.total_bin_count,
         e.auction_count,
+        e.median_auction_bid_count,
         e.median_auction_current_price,
+        e.active_ask_low,
+        e.active_ask_high,
+        e.active_ask_reference,
+        e.active_ask_seller_count,
         e.market_price_estimate,
         e.floor_quality_score,
         e.sampled_bin_count,
@@ -191,7 +270,12 @@ async function getClosestHistoricalSnapshot(cardId: number, snapshotDate: string
         e.floor_bin_count,
         e.total_bin_count,
         e.auction_count,
+        e.median_auction_bid_count,
         e.median_auction_current_price,
+        e.active_ask_low,
+        e.active_ask_high,
+        e.active_ask_reference,
+        e.active_ask_seller_count,
         e.market_price_estimate,
         e.floor_quality_score,
         e.sampled_bin_count,
@@ -217,7 +301,7 @@ async function getTrailingReferenceSeries(cardId: number, snapshotDate: string, 
   const lowerBound = shiftDate(snapshotDate, days - 1);
   const result = await pool.query<{ reference_price: number | null }>(
     `
-      select coalesce(market_price_estimate, floor_bin) as reference_price
+      select coalesce(active_ask_reference, market_price_estimate, floor_bin) as reference_price
       from ebay_daily
       where card_id = $1
         and snapshot_date between $2 and $3
@@ -430,9 +514,21 @@ function buildReasonCodes(input: {
   confidenceScore: number;
   queryConfidenceScore: number;
   current: HistoricalSnapshotRow;
+  liquidityTier: 'high' | 'medium' | 'low';
+  liquidityConfidenceScore: number;
+  collectorDiscountPct: number;
+  popularityTier: 'high' | 'standard' | 'niche';
   distortedHistory: boolean;
 }): string[] {
   const reasons: string[] = [];
+
+  reasons.push(`${input.liquidityTier} liquidity · collector discount ${formatPct(input.collectorDiscountPct)}`);
+  if (input.popularityTier !== 'standard') {
+    reasons.push(`${input.popularityTier} collector popularity`);
+  }
+  if (input.liquidityConfidenceScore < 70) {
+    reasons.push('liquidity confidence reduced');
+  }
 
   if ((input.ebayFloorChange7dPct ?? 0) > 0) {
     reasons.push(`7d market +${formatPct(input.ebayFloorChange7dPct)}`);
@@ -449,7 +545,7 @@ function buildReasonCodes(input: {
     reasons.push('auction signal unavailable (no near-end auctions)');
   }
   if ((input.absorption.absorbedRatioPct ?? 0) >= 30) {
-    reasons.push(`cheap copies absorbed ${formatPct(input.absorption.absorbedRatioPct)}`);
+    reasons.push(`cheap listings disappeared ${formatPct(input.absorption.absorbedRatioPct)} (sale unconfirmed)`);
   }
   if ((input.current.fresh_low_count_24h ?? 0) > 0) {
     reasons.push(`${input.current.fresh_low_count_24h} fresh low listings in 24h`);

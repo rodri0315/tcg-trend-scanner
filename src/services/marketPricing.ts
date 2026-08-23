@@ -16,6 +16,10 @@ export interface PreparedListingSample {
 }
 
 export interface MarketPriceMetrics {
+  activeAskLow: number | null;
+  activeAskHigh: number | null;
+  activeAskReference: number | null;
+  activeAskSellerCount: number;
   marketPriceEstimate: number | null;
   marketPriceMethod: string | null;
   floorBin: number | null;
@@ -42,6 +46,10 @@ export function deriveMarketPriceMetrics(
 
   if (binListings.length === 0) {
     return {
+      activeAskLow: null,
+      activeAskHigh: null,
+      activeAskReference: null,
+      activeAskSellerCount: 0,
       marketPriceEstimate: null,
       marketPriceMethod: null,
       floorBin: null,
@@ -62,6 +70,13 @@ export function deriveMarketPriceMetrics(
     MAX_CANDIDATE_FLOOR_SAMPLES,
   );
   const marketPriceEstimate = median(candidateFloorListings.map((listing) => listing.totalPrice));
+  const activeAskLow = candidateFloorListings[0]?.totalPrice ?? null;
+  const activeAskHigh = candidateFloorListings[candidateFloorListings.length - 1]?.totalPrice ?? null;
+  const activeAskSellerCount = new Set(
+    candidateFloorListings
+      .map((listing) => listing.sellerKey)
+      .filter((sellerKey): sellerKey is string => sellerKey !== null),
+  ).size;
   const marketPriceMethod = cluster
     ? `cluster_median_${candidateFloorListings.length}`
     : `fallback_lowest_${candidateFloorListings.length}`;
@@ -71,6 +86,10 @@ export function deriveMarketPriceMetrics(
   const newBinCount24h = countFreshListings(binListings, snapshotDate);
 
   return {
+    activeAskLow,
+    activeAskHigh,
+    activeAskReference: marketPriceEstimate,
+    activeAskSellerCount,
     marketPriceEstimate,
     marketPriceMethod,
     floorBin,

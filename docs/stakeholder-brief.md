@@ -18,7 +18,7 @@ It is not meant to make blind buy decisions on its own.
 The current MVP uses eBay US only.
 
 For each tracked card, the scanner looks at:
-- Buy It Now floor including shipping
+- credible low Buy It Now asking range including shipping
 - number of BIN listings
 - number of auction listings
 - median auction current price
@@ -31,6 +31,9 @@ Over time, daily history lets us measure:
 - auction activity changes
 - short-term volatility
 - whether auction pricing is lagging BIN pricing
+- observed liquidity, with a separate confidence score when historical inputs are incomplete
+
+Each card also has an expert-set collector popularity tier. The app combines that judgment with observed liquidity to adjust the expected direct-collector negotiation from the normal 5% starting point. It shows a range of collector maximum-buy prices rather than pretending there is one certain exit value. A disappeared listing is treated as an absorption signal, not proof of a completed sale.
 
 ## What The Report Means
 
@@ -54,12 +57,9 @@ Signals that help this score:
 - auction activity increasing
 
 ### Spike Flag
-This is a simple warning that a card may be moving unusually fast.
+This is a simple warning that a card may be moving unusually fast rather than climbing steadily.
 
-It is triggered when:
-- the 7-day floor move is strong
-- auctions are lagging current BIN floor
-- inventory is shrinking fast
+It is triggered when the 7-day move is strong relative to the 30-day move and short-term volatility is elevated.
 
 ## What The Tool Does Not Do Yet
 

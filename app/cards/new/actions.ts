@@ -11,6 +11,7 @@ export async function createCardAction(formData: FormData): Promise<void> {
   const productType = getRequiredString(formData, 'productType');
   const marketSegment = getRequiredString(formData, 'marketSegment');
   const condition = getRequiredString(formData, 'condition');
+  const popularityTier = getPopularityTier(formData);
   const name = getRequiredString(formData, 'name');
   const setName = getRequiredString(formData, 'setName');
   const cardNumber = getRequiredString(formData, 'cardNumber');
@@ -28,6 +29,7 @@ export async function createCardAction(formData: FormData): Promise<void> {
     productType,
     marketSegment,
     condition,
+    popularityTier,
     name,
     setName,
     cardNumber,
@@ -40,6 +42,15 @@ export async function createCardAction(formData: FormData): Promise<void> {
   revalidatePath('/cards');
   revalidatePath('/');
   redirect(`/cards/${cardId}`);
+}
+
+function getPopularityTier(formData: FormData): 'high' | 'standard' | 'niche' {
+  const value = getRequiredString(formData, 'popularityTier');
+  if (value !== 'high' && value !== 'standard' && value !== 'niche') {
+    throw new Error('Popularity tier must be high, standard, or niche.');
+  }
+
+  return value;
 }
 
 function getRequiredString(formData: FormData, key: string): string {

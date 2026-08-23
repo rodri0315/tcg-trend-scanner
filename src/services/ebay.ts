@@ -89,7 +89,7 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
     const binItems = saneBin.items;
     const sampledBinListings = binItems.slice(0, 30).map((item, index) => buildPreparedListingSample(item, 'BIN', index));
     const marketMetrics = deriveMarketPriceMetrics(sampledBinListings, snapshotDate);
-    const auctionUsage = selectUsableAuctions(card, filteredAuction.items, marketMetrics.marketPriceEstimate ?? marketMetrics.floorBin);
+    const auctionUsage = selectUsableAuctions(card, filteredAuction.items, marketMetrics.activeAskReference ?? marketMetrics.floorBin);
     const auctionItems = auctionUsage.usableItems;
     const medianAuctionCurrentPrice = median(
       auctionItems
@@ -124,6 +124,10 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
           .filter((value): value is number => value !== null),
       ),
       medianAuctionCurrentPrice,
+      activeAskLow: marketMetrics.activeAskLow,
+      activeAskHigh: marketMetrics.activeAskHigh,
+      activeAskReference: marketMetrics.activeAskReference,
+      activeAskSellerCount: marketMetrics.activeAskSellerCount,
       marketPriceEstimate: marketMetrics.marketPriceEstimate,
       marketPriceMethod: marketMetrics.marketPriceMethod,
       floorQualityScore: marketMetrics.floorQualityScore,
@@ -135,6 +139,11 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
       queryUsed: card.ebayQuery,
       rawPayload: {
         marketPricing: {
+          semantics: 'active_asking_prices_not_confirmed_sales',
+          activeAskLow: marketMetrics.activeAskLow,
+          activeAskHigh: marketMetrics.activeAskHigh,
+          activeAskReference: marketMetrics.activeAskReference,
+          activeAskSellerCount: marketMetrics.activeAskSellerCount,
           estimate: marketMetrics.marketPriceEstimate,
           method: marketMetrics.marketPriceMethod,
           floorQualityScore: marketMetrics.floorQualityScore,
