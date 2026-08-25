@@ -139,50 +139,52 @@ export interface CardDetail {
 }
 
 export async function getDashboardSummary(filters: DashboardFilters): Promise<DashboardSummary> {
-  const latestSignalDate = await getLatestSignalDate(filters);
-  const filterOptions = await getFilterOptions();
   const whereCards = buildCardFilterClause(filters, 1);
-  const trackedCardsResult = await pool.query<{ count: string }>(
-    `select count(*)::text as count from cards c ${whereCards.clause}`,
-    whereCards.params,
-  );
-  const trackedCards = Number(trackedCardsResult.rows[0]?.count ?? 0);
   const today = todayInNewYork();
   const whereHealth = buildCardFilterClause(filters, 2);
-  const healthResult = await pool.query<{
-    latest_live_snapshot_date: string | null;
-    live_cards_scanned: string;
-    cards_with_trusted_ask: string;
-    live_scan_days_30: string;
-  }>(
-    `
-      with filtered_live as (
-        select e.snapshot_date, e.active_ask_reference, e.sampled_bin_count
-        from ebay_daily e
-        inner join cards c on c.id = e.card_id
-        where e.snapshot_source = 'live'
-        ${whereHealth.clause ? `and ${whereHealth.clause.slice(6)}` : ''}
-      ), latest as (
-        select max(snapshot_date) as latest_date
-        from filtered_live
-      )
-      select
-        latest.latest_date::text as latest_live_snapshot_date,
-        count(*) filter (where live.snapshot_date = latest.latest_date)::text as live_cards_scanned,
-        count(*) filter (
-          where live.snapshot_date = latest.latest_date
-            and live.active_ask_reference is not null
-            and live.sampled_bin_count >= 3
-        )::text as cards_with_trusted_ask,
-        count(distinct live.snapshot_date) filter (
-          where live.snapshot_date between $1::date - 30 and $1::date - 1
-        )::text as live_scan_days_30
-      from latest
-      left join filtered_live live on true
-      group by latest.latest_date
-    `,
-    [today, ...whereHealth.params],
-  );
+  const [latestSignalDate, filterOptions, trackedCardsResult, healthResult] = await Promise.all([
+    getLatestSignalDate(filters),
+    getFilterOptions(),
+    pool.query<{ count: string }>(
+      `select count(*)::text as count from cards c ${whereCards.clause}`,
+      whereCards.params,
+    ),
+    pool.query<{
+      latest_live_snapshot_date: string | null;
+      live_cards_scanned: string;
+      cards_with_trusted_ask: string;
+      live_scan_days_30: string;
+    }>(
+      `
+        with filtered_live as (
+          select e.snapshot_date, e.active_ask_reference, e.sampled_bin_count
+          from ebay_daily e
+          inner join cards c on c.id = e.card_id
+          where e.snapshot_source = 'live'
+          ${whereHealth.clause ? `and ${whereHealth.clause.slice(6)}` : ''}
+        ), latest as (
+          select max(snapshot_date) as latest_date
+          from filtered_live
+        )
+        select
+          latest.latest_date::text as latest_live_snapshot_date,
+          count(*) filter (where live.snapshot_date = latest.latest_date)::text as live_cards_scanned,
+          count(*) filter (
+            where live.snapshot_date = latest.latest_date
+              and live.active_ask_reference is not null
+              and live.sampled_bin_count >= 3
+          )::text as cards_with_trusted_ask,
+          count(distinct live.snapshot_date) filter (
+            where live.snapshot_date between $1::date - 30 and $1::date - 1
+          )::text as live_scan_days_30
+        from latest
+        left join filtered_live live on true
+        group by latest.latest_date
+      `,
+      [today, ...whereHealth.params],
+    ),
+  ]);
+  const trackedCards = Number(trackedCardsResult.rows[0]?.count ?? 0);
   const healthRow = healthResult.rows[0];
   const latestLiveSnapshotDate = healthRow?.latest_live_snapshot_date ?? null;
   const daysSinceLatestLiveSnapshot = daysBetweenDates(today, latestLiveSnapshotDate);

@@ -138,7 +138,7 @@ Production fails closed with a `503` if the password is missing. Local developme
 
 ## Scheduled live scan
 
-Vercel invokes `/api/cron/daily-scan` at 14:00 UTC and a recovery check at 18:00 UTC. The recovery route exits without calling eBay when the primary run already completed. Set a unique, sensitive `CRON_SECRET` in the Vercel Production environment; Vercel sends it as a Bearer token and both endpoints fail closed when it is absent or incorrect.
+Vercel invokes `/api/cron/daily-scan` at 14:00 UTC and a recovery check at 18:00 UTC. The recovery route exits without calling eBay when the primary run already completed. A storage-maintenance check runs Sundays at 16:00 UTC. Set a unique, sensitive `CRON_SECRET` in the Vercel Production environment; Vercel sends it as a Bearer token and all cron endpoints fail closed when it is absent or incorrect.
 
 The scheduled function:
 - uses the New York calendar date for market snapshots
@@ -147,6 +147,14 @@ The scheduled function:
 - records success or failure in `scan_runs`
 - does not write CSV or Markdown files to ephemeral serverless storage
 - retries transient eBay timeouts, rate limits, and server errors up to three attempts while respecting `Retry-After`
+
+Storage maintenance is disabled by default. While disabled, the weekly route reports what would be cleaned without changing data. Set `STORAGE_MAINTENANCE_ENABLED=true` only after approving this policy:
+
+- preserve aggregate `ebay_daily` and `signals_daily` history indefinitely
+- preserve the decision journal indefinitely
+- delete listing samples older than 90 days in 5,000-row batches
+- clear bulky `raw_payload` debug data after 45 days while keeping all aggregate snapshot columns
+- delete successful scan-run logs after 365 days; failed runs are retained
 
 Run the dashboard locally:
 
