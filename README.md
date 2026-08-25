@@ -138,7 +138,7 @@ Production fails closed with a `503` if the password is missing. Local developme
 
 ## Scheduled live scan
 
-Vercel invokes `/api/cron/daily-scan` once per day at 14:00 UTC. Set a unique, sensitive `CRON_SECRET` in the Vercel Production environment; Vercel sends it as a Bearer token and the endpoint fails closed when it is absent or incorrect.
+Vercel invokes `/api/cron/daily-scan` at 14:00 UTC and a recovery check at 18:00 UTC. The recovery route exits without calling eBay when the primary run already completed. Set a unique, sensitive `CRON_SECRET` in the Vercel Production environment; Vercel sends it as a Bearer token and both endpoints fail closed when it is absent or incorrect.
 
 The scheduled function:
 - uses the New York calendar date for market snapshots
@@ -146,6 +146,7 @@ The scheduled function:
 - skips a date that already has complete live coverage
 - records success or failure in `scan_runs`
 - does not write CSV or Markdown files to ephemeral serverless storage
+- retries transient eBay timeouts, rate limits, and server errors up to three attempts while respecting `Retry-After`
 
 Run the dashboard locally:
 

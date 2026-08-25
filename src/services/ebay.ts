@@ -7,6 +7,7 @@ import { getListingIdentityRejectionReason, normalizeText } from './listingIdent
 import { isThinMarketHistoricalOutlier } from './priceSanity';
 import type { Card, EbaySnapshot } from '../types';
 import { median, round, toNumber } from '../utils/math';
+import { withRetry } from '../utils/retry';
 
 interface EbayAuthResponse {
   access_token: string;
@@ -63,6 +64,8 @@ interface AuctionUsageDecision {
 }
 
 const AUCTION_END_WINDOW_HOURS = 12;
+const EBAY_REQUEST_TIMEOUT_MS = 20_000;
+const EBAY_REQUEST_MAX_ATTEMPTS = 3;
 
 export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): Promise<EbaySnapshot[]> {
   if (!config.ebayClientId || !config.ebayClientSecret) {
@@ -317,12 +320,15 @@ async function getEbayAccessToken(): Promise<string> {
     scope: 'https://api.ebay.com/oauth/api_scope',
   });
 
-  const response = await axios.post<EbayAuthResponse>(config.ebayAuthUrl, payload.toString(), {
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-  });
+  const response = await executeEbayRequest('oauth_token', () =>
+    axios.post<EbayAuthResponse>(config.ebayAuthUrl, payload.toString(), {
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      timeout: EBAY_REQUEST_TIMEOUT_MS,
+    }),
+  );
 
   if (!response.data.access_token) {
     throw new Error('eBay auth response did not include an access token.');
@@ -336,17 +342,20 @@ async function searchEbay(
   accessToken: string,
   buyingOption: 'FIXED_PRICE' | 'AUCTION',
 ): Promise<EbaySearchResponse> {
-  const response = await axios.get<EbaySearchResponse>(`${config.ebayApiBaseUrl}/buy/browse/v1/item_summary/search`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'X-EBAY-C-MARKETPLACE-ID': config.ebayMarketplaceId,
-    },
-    params: {
-      q: query,
-      limit: 200,
-      filter: `buyingOptions:{${buyingOption}},itemLocationCountry:US`,
-    },
-  });
+  const response = await executeEbayRequest(`search_${buyingOption.toLowerCase()}`, () =>
+    axios.get<EbaySearchResponse>(`${config.ebayApiBaseUrl}/buy/browse/v1/item_summary/search`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'X-EBAY-C-MARKETPLACE-ID': config.ebayMarketplaceId,
+      },
+      params: {
+        q: query,
+        limit: 200,
+        filter: `buyingOptions:{${buyingOption}},itemLocationCountry:US`,
+      },
+      timeout: EBAY_REQUEST_TIMEOUT_MS,
+    }),
+  );
 
   return response.data;
 }
@@ -589,7 +598,7 @@ async function filterEbayItemsByDetail(
           reason: getDetailGradeRejectionReason(card, detail),
         };
       } catch {
-        return { index, reason: null };
+        return { index, reason: 'detail_validation_failed' };
       }
     }),
   );
@@ -638,12 +647,15 @@ async function getEbayItemDetail(itemHref: string, accessToken: string): Promise
   const url = new URL(itemHref);
   url.search = '';
 
-  const response = await axios.get<EbayItemDetail>(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'X-EBAY-C-MARKETPLACE-ID': config.ebayMarketplaceId,
-    },
-  });
+  const response = await executeEbayRequest('item_detail', () =>
+    axios.get<EbayItemDetail>(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'X-EBAY-C-MARKETPLACE-ID': config.ebayMarketplaceId,
+      },
+      timeout: EBAY_REQUEST_TIMEOUT_MS,
+    }),
+  );
 
   return response.data;
 }
@@ -1039,3 +1051,58 @@ const DAMAGED_PATTERNS = [
 ];
 
 const DETAIL_VALIDATION_LIMIT = 5;
+
+async function executeEbayRequest<T>(label: string, operation: () => Promise<T>): Promise<T> {
+  return withRetry(operation, {
+    maxAttempts: EBAY_REQUEST_MAX_ATTEMPTS,
+    baseDelayMs: 500,
+    maxDelayMs: 5_000,
+    shouldRetry: isRetryableEbayError,
+    getRetryAfterMs: getEbayRetryAfterMs,
+    onRetry: ({ attempt, delayMs, error }) => {
+      console.warn(
+        JSON.stringify({
+          source: 'ebay-request-retry',
+          label,
+          attempt,
+          delayMs,
+          status: axios.isAxiosError(error) ? error.response?.status ?? null : null,
+          code: axios.isAxiosError(error) ? error.code ?? null : null,
+        }),
+      );
+    },
+  });
+}
+
+function isRetryableEbayError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) {
+    return false;
+  }
+
+  const status = error.response?.status;
+  if (status !== undefined) {
+    return status === 408 || status === 425 || status === 429 || status >= 500;
+  }
+
+  return ['ECONNABORTED', 'ECONNRESET', 'ENETUNREACH', 'ENOTFOUND', 'ETIMEDOUT'].includes(error.code ?? '');
+}
+
+function getEbayRetryAfterMs(error: unknown): number | null {
+  if (!axios.isAxiosError(error)) {
+    return null;
+  }
+
+  const rawValue = error.response?.headers?.['retry-after'];
+  if (rawValue === undefined || rawValue === null) {
+    return null;
+  }
+
+  const value = String(rawValue);
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return seconds * 1000;
+  }
+
+  const retryAt = Date.parse(value);
+  return Number.isFinite(retryAt) ? Math.max(0, retryAt - Date.now()) : null;
+}
