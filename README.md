@@ -168,6 +168,7 @@ The dashboard includes:
 - watchlist page for tracked cards
 - editable card detail pages with query-health review and recent history
 - local-price evaluator and per-card decision journal with frozen exit-economics evidence
+- live-only 7d/30d/90d score calibration with tolerance-window coverage and maturity gates
 
 ## eBay production keyset compliance
 The app includes a minimal Marketplace Account Deletion webhook at:

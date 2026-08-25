@@ -46,7 +46,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     <DashboardShell>
       <section className="heroPanel">
         <div>
-          <p className="eyebrow">Read-only internal dashboard</p>
+          <p className="eyebrow">Protected internal dashboard</p>
           <h2>Find the names that deserve a closer look before the market moves further.</h2>
           <p className="lede">
             The dashboard ranks tracked cards using daily eBay floors, inventory depth, and auction pressure.

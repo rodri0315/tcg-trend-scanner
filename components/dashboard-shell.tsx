@@ -10,6 +10,7 @@ interface DashboardShellProps {
 const navLinks = [
   { href: '/', label: 'Overview' },
   { href: '/cards', label: 'Watchlist' },
+  { href: '/backtests', label: 'Calibration' },
   { href: '/cards/new', label: 'Add Card' },
 ];
 

@@ -472,6 +472,15 @@ a {
   min-width: 760px;
 }
 
+.calibrationTableWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.calibrationTable {
+  min-width: 640px;
+}
+
 .dataTable th,
 .dataTable td {
   padding: 14px 12px;
