@@ -82,9 +82,46 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
           <Link href="/cards" className="textLink">
             Back to watchlist
           </Link>
+          <Link href={`/cards/${card.id}/edit`} className="textLink">
+            Edit card or query
+          </Link>
           <p className="queryBlock">{card.ebayQuery}</p>
           <QueryActions query={card.ebayQuery} searchUrl={ebaySearchUrl} />
         </div>
+      </section>
+
+      <section className={`panel section--narrow${card.queryHealth.status === 'healthy' ? ' panel--teal' : ' panel--amber'}`}>
+        <div className="sectionHead">
+          <div>
+            <p className="eyebrow">Query health</p>
+            <h3>{labelizeQueryHealth(card.queryHealth.status)}</h3>
+          </div>
+          <span className={`pill${card.queryHealth.status === 'healthy' ? '' : ' pill--hot'}`}>
+            {card.queryHealth.status}
+          </span>
+        </div>
+        <dl className="queryHealthMetrics">
+          <div>
+            <dt>Latest review</dt>
+            <dd>{card.queryHealth.latestSnapshotDate ?? 'Not scanned'}</dd>
+          </div>
+          <div>
+            <dt>BIN matches</dt>
+            <dd>{card.queryHealth.keptBinCount}/{card.queryHealth.fetchedBinCount}</dd>
+          </div>
+          <div>
+            <dt>Acceptance</dt>
+            <dd>{card.queryHealth.acceptancePct === null ? 'n/a' : `${card.queryHealth.acceptancePct}%`}</dd>
+          </div>
+        </dl>
+        <p className={card.queryHealth.reasons.length === 0 ? 'subtle' : ''}>
+          {card.queryHealth.reasons.length === 0
+            ? 'The latest scan used the current query and produced enough trusted fixed-price matches.'
+            : card.queryHealth.reasons.join(' · ')}
+        </p>
+        <Link href={`/cards/${card.id}/edit`} className="textLink">
+          Review query settings
+        </Link>
       </section>
 
       <section className="detailGrid section--narrow">
@@ -229,6 +266,18 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
 
 function labelizeCondition(value: string): string {
   return value.replace(/_or_better$/, '+').replace(/_/g, ' ');
+}
+
+function labelizeQueryHealth(value: 'healthy' | 'attention' | 'unscanned'): string {
+  if (value === 'healthy') {
+    return 'Validated by the latest scan';
+  }
+
+  if (value === 'unscanned') {
+    return 'Waiting for query validation';
+  }
+
+  return 'Review recommended';
 }
 
 function formatDaysLeft(daysLeft: number | null): string {

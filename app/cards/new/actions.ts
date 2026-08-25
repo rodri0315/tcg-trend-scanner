@@ -5,72 +5,14 @@ import { redirect } from 'next/navigation';
 
 import { assertInternalAccess } from '../../../src/auth/internalAccess';
 import { createCard } from '../../../src/services/cards';
+import { parseCardFormData } from '../form-data';
 
 export async function createCardAction(formData: FormData): Promise<void> {
   await assertInternalAccess();
 
-  const game = getRequiredString(formData, 'game');
-  const language = getRequiredString(formData, 'language');
-  const productType = getRequiredString(formData, 'productType');
-  const marketSegment = getRequiredString(formData, 'marketSegment');
-  const condition = getRequiredString(formData, 'condition');
-  const popularityTier = getPopularityTier(formData);
-  const name = getRequiredString(formData, 'name');
-  const setName = getRequiredString(formData, 'setName');
-  const cardNumber = getRequiredString(formData, 'cardNumber');
-  const variant = getOptionalString(formData, 'variant') ?? '';
-  const rarity = getOptionalString(formData, 'rarity');
-  const ebayQuery = getRequiredString(formData, 'ebayQuery');
-  const tags = (getOptionalString(formData, 'tags') ?? '')
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-
-  const cardId = await createCard({
-    game,
-    language,
-    productType,
-    marketSegment,
-    condition,
-    popularityTier,
-    name,
-    setName,
-    cardNumber,
-    rarity,
-    variant,
-    ebayQuery,
-    tags,
-  });
+  const cardId = await createCard(parseCardFormData(formData));
 
   revalidatePath('/cards');
   revalidatePath('/');
   redirect(`/cards/${cardId}`);
-}
-
-function getPopularityTier(formData: FormData): 'high' | 'standard' | 'niche' {
-  const value = getRequiredString(formData, 'popularityTier');
-  if (value !== 'high' && value !== 'standard' && value !== 'niche') {
-    throw new Error('Popularity tier must be high, standard, or niche.');
-  }
-
-  return value;
-}
-
-function getRequiredString(formData: FormData, key: string): string {
-  const value = formData.get(key);
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new Error(`Missing required field: ${key}`);
-  }
-
-  return value.trim();
-}
-
-function getOptionalString(formData: FormData, key: string): string | null {
-  const value = formData.get(key);
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed === '' ? null : trimmed;
 }

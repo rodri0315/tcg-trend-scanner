@@ -722,6 +722,30 @@ a {
   flex-wrap: wrap;
 }
 
+.queryHealthMetrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.queryHealthMetrics div {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.queryHealthMetrics dt {
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.queryHealthMetrics dd {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+}
+
 .queryActionButton {
   display: inline-flex;
   align-items: center;

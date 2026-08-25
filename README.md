@@ -24,7 +24,7 @@ Internal-only TCG trend and arbitrage scanner.
 - Local buy scoring with market-now estimates, target buy prices, confidence, and reason codes
 - Thin low-end listing sampling for floor-quality and absorption analysis
 - CSV and Markdown report output
-- Internal read-only dashboard for overview, watchlist review, and card detail history
+- Protected internal dashboard for overview, watchlist management, query-health review, and card detail history
 
 ## Environment
 Copy `.env.example` to `.env` and fill in:

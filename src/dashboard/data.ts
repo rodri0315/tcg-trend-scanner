@@ -1,5 +1,6 @@
 import { pool } from '../db/pool';
 import { assessPipelineHealth, daysBetweenDates, type PipelineHealthStatus } from './health';
+import { assessQueryHealth, type QueryHealthAssessment } from './queryHealth';
 import { assessOpportunityQuality } from '../opportunities/quality';
 import type { LatestListingDebug, ListingDebugEntry, ListingDebugGroup } from '../types';
 import { todayInNewYork } from '../utils/date';
@@ -134,6 +135,7 @@ export interface CardDetail {
   tags: string[];
   history: CardHistoryPoint[];
   latestListingDebug: LatestListingDebug | null;
+  queryHealth: QueryHealthAssessment;
 }
 
 export async function getDashboardSummary(filters: DashboardFilters): Promise<DashboardSummary> {
@@ -632,6 +634,14 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
   );
 
   const latestDebugRow = latestDebugResult.rows[0];
+  const latestListingDebug = latestDebugRow
+    ? parseLatestListingDebug(latestDebugRow.snapshot_date, latestDebugRow.query_used, latestDebugRow.raw_payload)
+    : null;
+  const latestBinFilter = asRecord(asRecord(asRecord(latestDebugRow?.raw_payload)?.filters)?.bin);
+  const detailValidationFailureCount = [
+    ...asArray(latestBinFilter?.rejected),
+    ...asArray(latestBinFilter?.priceSanityRejected),
+  ].filter((entry) => asRecord(entry)?.reason === 'detail_validation_failed').length;
 
   return {
     id: row.id,
@@ -669,9 +679,15 @@ export async function getCardDetail(cardId: number): Promise<CardDetail | null> 
         spikeFlag: historyRow.spike_flag,
       }))
       .reverse(),
-    latestListingDebug: latestDebugRow
-      ? parseLatestListingDebug(latestDebugRow.snapshot_date, latestDebugRow.query_used, latestDebugRow.raw_payload)
-      : null,
+    latestListingDebug,
+    queryHealth: assessQueryHealth({
+      currentQuery: row.ebay_query,
+      latestSnapshotDate: latestDebugRow?.snapshot_date ?? null,
+      queryUsed: latestDebugRow?.query_used ?? null,
+      fetchedBinCount: toNumberValue(latestBinFilter?.total) ?? 0,
+      keptBinCount: toNumberValue(latestBinFilter?.priceSanityKept) ?? toNumberValue(latestBinFilter?.kept) ?? 0,
+      detailValidationFailureCount,
+    }),
   };
 }
 

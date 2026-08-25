@@ -4,6 +4,29 @@ import { useEffect, useState } from 'react';
 
 import { createCardAction } from './actions';
 
+interface CardFormValues {
+  game: string;
+  language: string;
+  productType: string;
+  marketSegment: string;
+  condition: string;
+  popularityTier: string;
+  name: string;
+  setName: string;
+  cardNumber: string;
+  rarity: string | null;
+  variant: string;
+  ebayQuery: string;
+  tags: string[];
+}
+
+interface CardFormProps {
+  action?: (formData: FormData) => void | Promise<void>;
+  initialValues?: CardFormValues;
+  submitLabel?: string;
+  helperText?: string;
+}
+
 const GAMES = ['pokemon', 'one_piece'];
 const LANGUAGES = ['english', 'japanese'];
 const PRODUCT_TYPES = ['single'];
@@ -44,21 +67,27 @@ const VARIANT_PRESETS: Record<
   ],
 };
 
-export function CardForm() {
-  const [game, setGame] = useState('pokemon');
-  const [language, setLanguage] = useState('english');
-  const [productType, setProductType] = useState('single');
-  const [marketSegment, setMarketSegment] = useState('raw');
-  const [condition, setCondition] = useState('near_mint_or_better');
-  const [name, setName] = useState('');
-  const [cardSetName, setCardSetName] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [rarity, setRarity] = useState('');
-  const [variant, setVariant] = useState('');
-  const [tags, setTags] = useState('');
-  const [ebayQuery, setEbayQuery] = useState('');
-  const [queryEdited, setQueryEdited] = useState(false);
-  const [tagsEdited, setTagsEdited] = useState(false);
+export function CardForm({
+  action = createCardAction,
+  initialValues,
+  submitLabel = 'Save card',
+  helperText = 'After saving, the next scheduled scan will fetch the first market snapshot for this card.',
+}: CardFormProps) {
+  const [game, setGame] = useState(initialValues?.game ?? 'pokemon');
+  const [language, setLanguage] = useState(initialValues?.language ?? 'english');
+  const [productType, setProductType] = useState(initialValues?.productType ?? 'single');
+  const [marketSegment, setMarketSegment] = useState(initialValues?.marketSegment ?? 'raw');
+  const [condition, setCondition] = useState(initialValues?.condition ?? 'near_mint_or_better');
+  const [name, setName] = useState(initialValues?.name ?? '');
+  const [cardSetName, setCardSetName] = useState(initialValues?.setName ?? '');
+  const [cardNumber, setCardNumber] = useState(initialValues?.cardNumber ?? '');
+  const [rarity, setRarity] = useState(initialValues?.rarity ?? '');
+  const [variant, setVariant] = useState(initialValues?.variant ?? '');
+  const [tags, setTags] = useState(initialValues?.tags.join(', ') ?? '');
+  const [ebayQuery, setEbayQuery] = useState(initialValues?.ebayQuery ?? '');
+  const [queryEdited, setQueryEdited] = useState(initialValues !== undefined);
+  const [tagsEdited, setTagsEdited] = useState(initialValues !== undefined);
+  const isEditing = initialValues !== undefined;
   const variantPresets = VARIANT_PRESETS[game] ?? [];
 
   useEffect(() => {
@@ -77,19 +106,16 @@ export function CardForm() {
     setTags(buildDefaultTags({ game, language, marketSegment, condition, variant, name }));
   }, [condition, game, language, marketSegment, name, tagsEdited, variant]);
 
-  useEffect(() => {
-    setCondition(marketSegment === 'psa_10' ? 'graded' : 'near_mint_or_better');
-    setQueryEdited(false);
-  }, [marketSegment]);
-
   return (
-    <form action={createCardAction} className="cardForm">
+    <form action={action} className="cardForm">
       <div className="formGrid">
         <label>
           Game
+          {isEditing ? <input type="hidden" name="game" value={game} /> : null}
           <select
             name="game"
             value={game}
+            disabled={isEditing}
               onChange={(event) => {
                 setGame(event.target.value);
                 setQueryEdited(false);
@@ -107,9 +133,11 @@ export function CardForm() {
 
         <label>
           Language
+          {isEditing ? <input type="hidden" name="language" value={language} /> : null}
           <select
             name="language"
             value={language}
+            disabled={isEditing}
               onChange={(event) => {
                 setLanguage(event.target.value);
                 setQueryEdited(false);
@@ -127,7 +155,8 @@ export function CardForm() {
 
         <label>
           Product type
-          <select name="productType" value={productType} onChange={(event) => setProductType(event.target.value)} required>
+          {isEditing ? <input type="hidden" name="productType" value={productType} /> : null}
+          <select name="productType" value={productType} onChange={(event) => setProductType(event.target.value)} disabled={isEditing} required>
             {PRODUCT_TYPES.map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -138,11 +167,15 @@ export function CardForm() {
 
         <label>
           Market segment
+          {isEditing ? <input type="hidden" name="marketSegment" value={marketSegment} /> : null}
           <select
             name="marketSegment"
             value={marketSegment}
+            disabled={isEditing}
             onChange={(event) => {
-              setMarketSegment(event.target.value);
+              const nextMarketSegment = event.target.value;
+              setMarketSegment(nextMarketSegment);
+              setCondition(nextMarketSegment === 'psa_10' ? 'graded' : 'near_mint_or_better');
               setQueryEdited(false);
               setTagsEdited(false);
             }}
@@ -177,7 +210,7 @@ export function CardForm() {
 
         <label>
           Collector popularity
-          <select name="popularityTier" defaultValue="standard" required>
+          <select name="popularityTier" defaultValue={initialValues?.popularityTier ?? 'standard'} required>
             {POPULARITY_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -343,9 +376,15 @@ export function CardForm() {
       </div>
 
       <div className="formActions">
-        <button type="submit">Save card</button>
-        <p className="subtle">After saving, run the daily job to fetch the first market snapshot for the new card.</p>
+        <button type="submit">{submitLabel}</button>
+        <p className="subtle">{helperText}</p>
       </div>
+      {isEditing ? (
+        <p className="subtle">
+          Game, language, product type, and market segment are locked because changing those lanes would mix old
+          snapshots with a different market. Add a new card row when one of those changes.
+        </p>
+      ) : null}
     </form>
   );
 }
