@@ -36,6 +36,12 @@ Copy `.env.example` to `.env` and fill in:
 - `APP_BASE_URL`
 - Optional selling-cost assumptions described below
 
+## Repository safeguards
+
+GitHub Actions runs the complete test suite and production web build on every push and pull request. A full-history Gitleaks scan blocks committed credentials, and Dependabot checks npm and GitHub Actions dependencies weekly.
+
+Local environment variants such as `.env.local` and `.env.production` are ignored. Only `.env.example` may be committed. Rotating a leaked credential remains necessary even if it is later removed from Git history.
+
 ## Database setup
 Apply [`migrations/001_init.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/001_init.sql) to a fresh database.
 If you already applied the earlier pre-pivot schema, also apply [`migrations/002_ebay_only_signals.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/002_ebay_only_signals.sql).
