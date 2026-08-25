@@ -3,9 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
+import { assertInternalAccess } from '../../../src/auth/internalAccess';
 import { createCard } from '../../../src/services/cards';
 
 export async function createCardAction(formData: FormData): Promise<void> {
+  await assertInternalAccess();
+
   const game = getRequiredString(formData, 'game');
   const language = getRequiredString(formData, 'language');
   const productType = getRequiredString(formData, 'productType');

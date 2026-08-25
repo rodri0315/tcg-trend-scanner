@@ -7,7 +7,7 @@
     "build": "npm run build:cli && npm run build:web",
     "build:cli": "tsc -p tsconfig.scripts.json",
     "build:web": "next build",
-    "test": "npm run build:cli && node --test dist/src/economics/liquidity.test.js dist/src/economics/netOutcome.test.js dist/src/services/marketPricing.test.js",
+    "test": "npm run build:cli && node --test dist/src/auth/basicAuth.test.js dist/src/economics/liquidity.test.js dist/src/economics/netOutcome.test.js dist/src/opportunities/quality.test.js dist/src/services/marketPricing.test.js",
     "dev": "next dev",
     "start": "next start",
     "cli:dev": "ts-node -P tsconfig.scripts.json src/index.ts",

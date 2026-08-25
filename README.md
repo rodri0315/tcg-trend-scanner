@@ -44,6 +44,7 @@ Apply [`migrations/004_listing_sample_unique_per_card.sql`](/Users/jorgerodrigue
 Apply [`migrations/005_snapshot_source.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/005_snapshot_source.sql) to separate live history from backfill and fixture data.
 Apply [`migrations/006_card_condition.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/006_card_condition.sql) to add tracked card condition lanes like `near_mint_or_better` and `graded`.
 Apply [`migrations/007_economic_decision_support.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/007_economic_decision_support.sql) to add explicit active-ask ranges, expert popularity tiers, liquidity fields, and auditable net-exit/max-buy scenarios.
+Apply [`migrations/008_internal_security.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/008_internal_security.sql) to enable RLS and remove Supabase Data API access from the internal application tables.
 
 ## Exit scenarios
 
@@ -111,6 +112,15 @@ Outputs are written to the `reports/` directory as:
 - `YYYY-MM-DD-opportunities.md`
 
 ## Internal dashboard
+The deployed dashboard uses HTTP Basic Authentication for its single internal user. Set these in every deployed environment before release:
+
+```text
+APP_ACCESS_USERNAME=admin
+APP_ACCESS_PASSWORD=<long unique password>
+```
+
+Production fails closed with a `503` if the password is missing. Local development remains open when the password is unset. The eBay Marketplace Account Deletion webhook is intentionally excluded from dashboard authentication.
+
 Run the dashboard locally:
 
 ```bash
@@ -126,6 +136,8 @@ npm run start
 
 The dashboard includes:
 - overview page with game, language, and market filters
+- actionable opportunities ordered by confidence-adjusted `rank_score`
+- a review queue for low-confidence, thin, wide-range, or non-executable signals
 - watchlist page for tracked cards
 - card detail pages with recent history
 

@@ -22,10 +22,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     marketSegment: selectedMarketSegment,
   };
 
-  const [summary, opportunities] = await Promise.all([
+  const [summary, latestRows] = await Promise.all([
     getDashboardSummary(filters),
-    getLatestOpportunities(filters, 12),
+    getLatestOpportunities(filters, 50),
   ]);
+  const opportunities = latestRows.filter((row) => row.isActionable).slice(0, 12);
+  const reviewQueue = latestRows.filter((row) => !row.isActionable);
   const summaryHelp = {
     latestSignalDate: 'Most recent day the signal pipeline completed for this filter set. If this is stale, the rankings may be stale too.',
     trackedCards: 'How many cards are currently on the watchlist for the selected filters. This is the size of the review universe.',
@@ -86,7 +88,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <div className="sectionHead">
           <div>
             <p className="eyebrow">Top opportunities</p>
-            <h3>Highest ranked cards in the latest run</h3>
+            <h3>Highest ranked actionable cards in the latest run</h3>
           </div>
           <Link href="/cards" className="textLink">
             Open full watchlist
@@ -95,7 +97,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
         {opportunities.length === 0 ? (
           <p className="emptyState">
-            No signals yet for this filter set. Run the daily job and refresh this page once data lands.
+            No cards currently meet the confidence, listing-depth, ask-range, and exit-economics gates.
           </p>
         ) : (
           <div className="cardRail">
@@ -115,6 +117,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   {row.setName} · {row.variant}
                 </p>
                 <dl className="scoreGrid">
+                  <div>
+                    <dt>Rank</dt>
+                    <dd>{row.rankScore.toFixed(2)}</dd>
+                  </div>
+                  <div>
+                    <dt>Confidence</dt>
+                    <dd>{row.confidenceScore.toFixed(2)}</dd>
+                  </div>
                   <div>
                     <dt>Trend</dt>
                     <dd>{row.trendScore.toFixed(2)}</dd>
@@ -140,6 +150,36 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
         )}
       </section>
+
+      {reviewQueue.length > 0 ? (
+        <section className="panel">
+          <div className="sectionHead">
+            <div>
+              <p className="eyebrow">Needs review</p>
+              <h3>Signals withheld from the actionable ranking</h3>
+            </div>
+          </div>
+          <div className="cardRail">
+            {reviewQueue.map((row) => (
+              <Link key={row.id} href={`/cards/${row.id}`} className="opportunityCard">
+                <div className="pillRow">
+                  <span className="pill pill--hot">review</span>
+                  <span className="pill">confidence {row.confidenceScore.toFixed(0)}</span>
+                  <span className="pill">{row.sampledBinCount} BIN samples</span>
+                </div>
+                <h4>
+                  {row.name} <span>{row.cardNumber}</span>
+                </h4>
+                <p className="subtle">{row.setName} · {row.language} · {row.marketSegment}</p>
+                <p>{row.reviewReasons.join(' · ')}</p>
+                <p className="subtle">
+                  Ask {formatCurrencyRange(row.activeAskLow, row.activeAskHigh)} · rank {row.rankScore.toFixed(2)}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </DashboardShell>
   );
 }

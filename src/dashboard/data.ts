@@ -1,4 +1,5 @@
 import { pool } from '../db/pool';
+import { assessOpportunityQuality } from '../opportunities/quality';
 import type { LatestListingDebug, ListingDebugEntry, ListingDebugGroup } from '../types';
 
 export interface DashboardFilters {
@@ -53,6 +54,11 @@ export interface OpportunityRow {
   ebayFloorChange30dPct: number | null;
   trendScore: number;
   localLagScore: number;
+  rankScore: number;
+  confidenceScore: number;
+  sampledBinCount: number;
+  isActionable: boolean;
+  reviewReasons: string[];
   spikeFlag: boolean;
 }
 
@@ -213,6 +219,9 @@ export async function getLatestOpportunities(
     ebay_floor_change_30d_pct: string | null;
     trend_score: string;
     local_lag_score: string;
+    rank_score: string;
+    confidence_score: string;
+    sampled_bin_count: number;
     spike_flag: boolean;
   }>(
     `
@@ -248,6 +257,9 @@ export async function getLatestOpportunities(
         s.ebay_floor_change_30d_pct,
         s.trend_score,
         s.local_lag_score,
+        s.rank_score,
+        s.confidence_score,
+        coalesce(e.sampled_bin_count, 0) as sampled_bin_count,
         s.spike_flag
       from signals_daily s
       inner join cards c on c.id = s.card_id
@@ -256,46 +268,67 @@ export async function getLatestOpportunities(
        and e.snapshot_date = s.signal_date
       where s.signal_date = $1
       ${where.clause ? `and ${where.clause.slice(6)}` : ''}
-      order by s.trend_score desc, s.local_lag_score desc, c.name asc
+      order by s.rank_score desc, s.confidence_score desc, c.name asc
       limit $${where.params.length + 2}
     `,
     [latestSignalDate, ...where.params, limit],
   );
 
-  return result.rows.map((row) => ({
-    id: row.id,
-    game: row.game,
-    language: row.language,
-    marketSegment: row.market_segment,
-    condition: row.condition,
-    popularityTier: row.popularity_tier,
-    name: row.name,
-    setName: row.set_name,
-    cardNumber: row.card_number,
-    variant: row.variant,
-    tags: row.tags ?? [],
-    ebayFloor: toNullableNumber(row.ebay_floor),
-    activeAskLow: toNullableNumber(row.active_ask_low),
-    activeAskHigh: toNullableNumber(row.active_ask_high),
-    activeAskReference: toNullableNumber(row.active_ask_reference),
-    activeAskSellerCount: row.active_ask_seller_count,
-    estimatedNetExit: toNullableNumber(row.estimated_net_exit),
-    maxBuyPrice: toNullableNumber(row.max_buy_price),
-    collectorMaxBuyLow: toNullableNumber(row.collector_max_buy_low),
-    collectorMaxBuyHigh: toNullableNumber(row.collector_max_buy_high),
-    vendorMaxBuyPrice: toNullableNumber(row.vendor_max_buy_price),
-    liquidityScore: toNumberOrZero(row.liquidity_score),
-    liquidityTier: row.liquidity_tier,
-    collectorDiscountPct: toNumberOrZero(row.collector_discount_pct),
-    targetNetRoiPct: toNullableNumber(row.target_net_roi_pct),
-    totalBinCount: row.total_bin_count,
-    auctionCount: row.auction_count,
-    ebayFloorChange7dPct: toNullableNumber(row.ebay_floor_change_7d_pct),
-    ebayFloorChange30dPct: toNullableNumber(row.ebay_floor_change_30d_pct),
-    trendScore: toNumberOrZero(row.trend_score),
-    localLagScore: toNumberOrZero(row.local_lag_score),
-    spikeFlag: row.spike_flag,
-  }));
+  return result.rows.map((row) => {
+    const activeAskLow = toNullableNumber(row.active_ask_low);
+    const activeAskHigh = toNullableNumber(row.active_ask_high);
+    const activeAskReference = toNullableNumber(row.active_ask_reference);
+    const maxBuyPrice = toNullableNumber(row.max_buy_price);
+    const confidenceScore = toNumberOrZero(row.confidence_score);
+    const quality = assessOpportunityQuality({
+      confidenceScore,
+      sampledBinCount: row.sampled_bin_count,
+      activeAskLow,
+      activeAskHigh,
+      activeAskReference,
+      maxBuyPrice,
+    });
+
+    return {
+      id: row.id,
+      game: row.game,
+      language: row.language,
+      marketSegment: row.market_segment,
+      condition: row.condition,
+      popularityTier: row.popularity_tier,
+      name: row.name,
+      setName: row.set_name,
+      cardNumber: row.card_number,
+      variant: row.variant,
+      tags: row.tags ?? [],
+      ebayFloor: toNullableNumber(row.ebay_floor),
+      activeAskLow,
+      activeAskHigh,
+      activeAskReference,
+      activeAskSellerCount: row.active_ask_seller_count,
+      estimatedNetExit: toNullableNumber(row.estimated_net_exit),
+      maxBuyPrice,
+      collectorMaxBuyLow: toNullableNumber(row.collector_max_buy_low),
+      collectorMaxBuyHigh: toNullableNumber(row.collector_max_buy_high),
+      vendorMaxBuyPrice: toNullableNumber(row.vendor_max_buy_price),
+      liquidityScore: toNumberOrZero(row.liquidity_score),
+      liquidityTier: row.liquidity_tier,
+      collectorDiscountPct: toNumberOrZero(row.collector_discount_pct),
+      targetNetRoiPct: toNullableNumber(row.target_net_roi_pct),
+      totalBinCount: row.total_bin_count,
+      auctionCount: row.auction_count,
+      ebayFloorChange7dPct: toNullableNumber(row.ebay_floor_change_7d_pct),
+      ebayFloorChange30dPct: toNullableNumber(row.ebay_floor_change_30d_pct),
+      trendScore: toNumberOrZero(row.trend_score),
+      localLagScore: toNumberOrZero(row.local_lag_score),
+      rankScore: toNumberOrZero(row.rank_score),
+      confidenceScore,
+      sampledBinCount: row.sampled_bin_count,
+      isActionable: quality.isActionable,
+      reviewReasons: quality.reviewReasons,
+      spikeFlag: row.spike_flag,
+    };
+  });
 }
 
 export async function getWatchlistCards(filters: DashboardFilters): Promise<WatchlistCard[]> {

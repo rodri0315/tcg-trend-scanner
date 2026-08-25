@@ -34,14 +34,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const payload = await request.json().catch(() => null);
+  await request.json().catch(() => null);
 
   console.log(
     JSON.stringify({
       source: 'ebay-marketplace-account-deletion',
       path: EBAY_DELETION_NOTIFICATION_PATH,
       receivedAt: new Date().toISOString(),
-      payload,
     }),
   );
 
