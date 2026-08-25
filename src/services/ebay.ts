@@ -1,8 +1,10 @@
 import axios from 'axios';
 
 import { config } from '../config';
+import { pool } from '../db/pool';
 import { deriveMarketPriceMetrics, type PreparedListingSample } from './marketPricing';
 import { getListingIdentityRejectionReason, normalizeText } from './listingIdentity';
+import { isThinMarketHistoricalOutlier } from './priceSanity';
 import type { Card, EbaySnapshot } from '../types';
 import { median, round, toNumber } from '../utils/math';
 
@@ -70,6 +72,7 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
   const accessToken = await getEbayAccessToken();
   const snapshots: EbaySnapshot[] = [];
   const observedAt = new Date(`${snapshotDate}T12:00:00.000Z`).toISOString();
+  const historicalReferences = await getHistoricalMarketReferences(cards, snapshotDate);
 
   for (const card of cards) {
     const [binResponse, auctionResponse] = await Promise.all([
@@ -86,7 +89,13 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
         .map((item) => totalListingPrice(item.currentBidPrice?.value, item.shippingOptions))
         .filter((value): value is number => value !== null),
     );
-    const saneBin = filterBinPriceOutliers(card, filteredBin.items, preliminaryAuctionMedian);
+    const historicalReference = historicalReferences.get(card.id) ?? null;
+    const saneBin = filterBinPriceOutliers(
+      card,
+      filteredBin.items,
+      preliminaryAuctionMedian,
+      historicalReference,
+    );
     const binItems = saneBin.items;
     const sampledBinListings = binItems.slice(0, 30).map((item, index) => buildPreparedListingSample(item, 'BIN', index));
     const marketMetrics = deriveMarketPriceMetrics(sampledBinListings, snapshotDate);
@@ -151,6 +160,7 @@ export async function fetchEbaySnapshots(cards: Card[], snapshotDate: string): P
           sampledBinCount: sampledBinListings.length,
           sampledAuctionCount: sampledAuctionListings.length,
           sellerConcentrationTop3Pct: marketMetrics.sellerConcentrationTop3Pct,
+          historicalReference,
         },
         filters: {
           bin: {
@@ -355,6 +365,7 @@ function filterBinPriceOutliers(
   card: Card,
   items: EbayItemSummary[],
   medianAuctionCurrentPrice: number | null,
+  historicalReference: number | null,
 ): { items: EbayItemSummary[]; prices: number[]; rejections: Array<{ title: string; price: number; reason: string }> } {
   const pricedItems = items
     .map((item) => ({
@@ -365,6 +376,27 @@ function filterBinPriceOutliers(
     .sort((left, right) => left.price - right.price);
 
   const rejections: Array<{ title: string; price: number; reason: string }> = [];
+
+  if (pricedItems.length > 0 && pricedItems.length < 3 && historicalReference !== null) {
+    for (let index = pricedItems.length - 1; index >= 0; index -= 1) {
+      const candidate = pricedItems[index];
+      if (
+        isThinMarketHistoricalOutlier({
+          currentPrice: candidate.price,
+          currentSampleCount: pricedItems.length,
+          historicalReference,
+          marketSegment: card.marketSegment,
+        })
+      ) {
+        rejections.push({
+          title: candidate.item.title ?? '(untitled listing)',
+          price: candidate.price,
+          reason: `thin_market_historical_outlier:${candidate.price.toFixed(2)} vs historical=${historicalReference.toFixed(2)}`,
+        });
+        pricedItems.splice(index, 1);
+      }
+    }
+  }
 
   while (pricedItems.length >= 2) {
     const clusterBoundary = findLowPriceClusterBoundary(pricedItems, card.marketSegment);
@@ -425,6 +457,33 @@ function filterBinPriceOutliers(
     prices: pricedItems.map((entry) => entry.price),
     rejections,
   };
+}
+
+async function getHistoricalMarketReferences(cards: Card[], snapshotDate: string): Promise<Map<number, number>> {
+  if (cards.length === 0) {
+    return new Map<number, number>();
+  }
+
+  const result = await pool.query<{ active_ask_reference: string; card_id: number }>(
+    `
+      select distinct on (e.card_id)
+        e.card_id,
+        e.active_ask_reference
+      from ebay_daily e
+      where e.card_id = any($1::bigint[])
+        and e.snapshot_date < $2
+        and e.snapshot_source = 'live'
+        and e.active_ask_reference is not null
+        and e.sampled_bin_count >= 3
+        and e.floor_quality_score >= 50
+      order by e.card_id, e.snapshot_date desc
+    `,
+    [cards.map((card) => card.id), snapshotDate],
+  );
+
+  return new Map(
+    result.rows.map((row) => [row.card_id, Number(row.active_ask_reference)]),
+  );
 }
 
 function findLowPriceClusterBoundary(
