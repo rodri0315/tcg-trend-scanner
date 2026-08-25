@@ -1,6 +1,8 @@
 import { pool } from '../db/pool';
+import { assessPipelineHealth, daysBetweenDates, type PipelineHealthStatus } from './health';
 import { assessOpportunityQuality } from '../opportunities/quality';
 import type { LatestListingDebug, ListingDebugEntry, ListingDebugGroup } from '../types';
+import { todayInNewYork } from '../utils/date';
 import { percentChange } from '../utils/math';
 
 export interface DashboardFilters {
@@ -16,6 +18,14 @@ export interface DashboardSummary {
   spikeFlags: number;
   averageTrendScore: number | null;
   averageLocalLagScore: number | null;
+  pipelineStatus: PipelineHealthStatus;
+  pipelineReasons: string[];
+  latestLiveSnapshotDate: string | null;
+  daysSinceLatestLiveSnapshot: number | null;
+  liveCardsScanned: number;
+  cardsWithTrustedAsk: number;
+  scanCoveragePct: number;
+  missingLiveScanDays30: number;
   filters: {
     games: string[];
     languages: string[];
@@ -134,15 +144,74 @@ export async function getDashboardSummary(filters: DashboardFilters): Promise<Da
     `select count(*)::text as count from cards c ${whereCards.clause}`,
     whereCards.params,
   );
+  const trackedCards = Number(trackedCardsResult.rows[0]?.count ?? 0);
+  const today = todayInNewYork();
+  const whereHealth = buildCardFilterClause(filters, 2);
+  const healthResult = await pool.query<{
+    latest_live_snapshot_date: string | null;
+    live_cards_scanned: string;
+    cards_with_trusted_ask: string;
+    live_scan_days_30: string;
+  }>(
+    `
+      with filtered_live as (
+        select e.snapshot_date, e.active_ask_reference, e.sampled_bin_count
+        from ebay_daily e
+        inner join cards c on c.id = e.card_id
+        where e.snapshot_source = 'live'
+        ${whereHealth.clause ? `and ${whereHealth.clause.slice(6)}` : ''}
+      ), latest as (
+        select max(snapshot_date) as latest_date
+        from filtered_live
+      )
+      select
+        latest.latest_date::text as latest_live_snapshot_date,
+        count(*) filter (where live.snapshot_date = latest.latest_date)::text as live_cards_scanned,
+        count(*) filter (
+          where live.snapshot_date = latest.latest_date
+            and live.active_ask_reference is not null
+            and live.sampled_bin_count >= 3
+        )::text as cards_with_trusted_ask,
+        count(distinct live.snapshot_date) filter (
+          where live.snapshot_date between $1::date - 30 and $1::date - 1
+        )::text as live_scan_days_30
+      from latest
+      left join filtered_live live on true
+      group by latest.latest_date
+    `,
+    [today, ...whereHealth.params],
+  );
+  const healthRow = healthResult.rows[0];
+  const latestLiveSnapshotDate = healthRow?.latest_live_snapshot_date ?? null;
+  const daysSinceLatestLiveSnapshot = daysBetweenDates(today, latestLiveSnapshotDate);
+  const liveCardsScanned = Number(healthRow?.live_cards_scanned ?? 0);
+  const cardsWithTrustedAsk = Number(healthRow?.cards_with_trusted_ask ?? 0);
+  const missingLiveScanDays30 = Math.max(0, 30 - Number(healthRow?.live_scan_days_30 ?? 0));
+  const scanCoveragePct = trackedCards === 0 ? 0 : Math.round((liveCardsScanned / trackedCards) * 100);
+  const pipelineHealth = assessPipelineHealth({
+    daysSinceLatestLiveSnapshot,
+    trackedCards,
+    liveCardsScanned,
+    cardsWithTrustedAsk,
+    missingLiveScanDays30,
+  });
 
   if (!latestSignalDate) {
     return {
       latestSignalDate: null,
-      trackedCards: Number(trackedCardsResult.rows[0]?.count ?? 0),
+      trackedCards,
       cardsWithSignals: 0,
       spikeFlags: 0,
       averageTrendScore: null,
       averageLocalLagScore: null,
+      pipelineStatus: pipelineHealth.status,
+      pipelineReasons: pipelineHealth.reasons,
+      latestLiveSnapshotDate,
+      daysSinceLatestLiveSnapshot,
+      liveCardsScanned,
+      cardsWithTrustedAsk,
+      scanCoveragePct,
+      missingLiveScanDays30,
       filters: filterOptions,
     };
   }
@@ -170,11 +239,19 @@ export async function getDashboardSummary(filters: DashboardFilters): Promise<Da
 
   return {
     latestSignalDate,
-    trackedCards: Number(trackedCardsResult.rows[0]?.count ?? 0),
+    trackedCards,
     cardsWithSignals: Number(statsResult.rows[0]?.cards_with_signals ?? 0),
     spikeFlags: Number(statsResult.rows[0]?.spike_flags ?? 0),
     averageTrendScore: toNullableNumber(statsResult.rows[0]?.average_trend_score),
     averageLocalLagScore: toNullableNumber(statsResult.rows[0]?.average_local_lag_score),
+    pipelineStatus: pipelineHealth.status,
+    pipelineReasons: pipelineHealth.reasons,
+    latestLiveSnapshotDate,
+    daysSinceLatestLiveSnapshot,
+    liveCardsScanned,
+    cardsWithTrustedAsk,
+    scanCoveragePct,
+    missingLiveScanDays30,
     filters: filterOptions,
   };
 }

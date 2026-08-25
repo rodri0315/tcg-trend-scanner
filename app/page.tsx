@@ -30,6 +30,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const reviewQueue = latestRows.filter((row) => !row.isActionable);
   const summaryHelp = {
     latestSignalDate: 'Most recent day the signal pipeline completed for this filter set. If this is stale, the rankings may be stale too.',
+    pipelineStatus: 'Overall health based on live-scan freshness, card coverage, trusted ask availability, and daily continuity.',
+    latestLiveSnapshotDate: 'Most recent date containing live eBay data. Backfills and fixtures do not count.',
+    scanCoverage: 'Tracked cards that received a snapshot in the latest live scan.',
+    trustedMarkets: 'Latest scanned cards with at least three credible BIN listings and a usable active-ask reference.',
+    missingScanDays: 'Completed calendar days without a live scan during the previous 30 days. Today is excluded.',
     trackedCards: 'How many cards are currently on the watchlist for the selected filters. This is the size of the review universe.',
     cardsWithSignals: 'How many tracked cards have a signal row in the latest run. This shows how much of the watchlist is active in the current snapshot.',
     spikeFlags: 'Count of cards flagged as sudden moves rather than steadier climbs. Useful for spotting hype bursts that may need extra caution.',
@@ -58,7 +63,54 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         />
       </section>
 
+      <section className="panel">
+        <div className="sectionHead">
+          <div>
+            <p className="eyebrow">Pipeline health</p>
+            <h3>{labelizeHealthStatus(summary.pipelineStatus)}</h3>
+          </div>
+          <span className={`pill${summary.pipelineStatus === 'healthy' ? '' : ' pill--hot'}`}>
+            {summary.pipelineStatus}
+          </span>
+        </div>
+        <p className={summary.pipelineReasons.length === 0 ? 'subtle' : ''}>
+          {summary.pipelineReasons.length === 0
+            ? 'Live scans are current, complete, and producing trusted market references.'
+            : summary.pipelineReasons.join(' · ')}
+        </p>
+      </section>
+
       <section className="metricGrid">
+        <MetricCard
+          label="Pipeline status"
+          value={labelizeHealthStatus(summary.pipelineStatus)}
+          help={summaryHelp.pipelineStatus}
+          tone={summary.pipelineStatus === 'healthy' ? 'accent' : 'warning'}
+        />
+        <MetricCard
+          label="Latest live scan"
+          value={summary.latestLiveSnapshotDate ?? 'No live scans'}
+          help={summaryHelp.latestLiveSnapshotDate}
+          tone={summary.daysSinceLatestLiveSnapshot !== null && summary.daysSinceLatestLiveSnapshot <= 1 ? 'accent' : 'warning'}
+        />
+        <MetricCard
+          label="Latest scan coverage"
+          value={`${summary.liveCardsScanned}/${summary.trackedCards} (${summary.scanCoveragePct}%)`}
+          help={summaryHelp.scanCoverage}
+          tone={summary.scanCoveragePct === 100 ? 'accent' : 'warning'}
+        />
+        <MetricCard
+          label="Trusted markets"
+          value={`${summary.cardsWithTrustedAsk}/${summary.liveCardsScanned}`}
+          help={summaryHelp.trustedMarkets}
+          tone={summary.cardsWithTrustedAsk === summary.liveCardsScanned && summary.liveCardsScanned > 0 ? 'accent' : 'warning'}
+        />
+        <MetricCard
+          label="Missing scan days (30d)"
+          value={String(summary.missingLiveScanDays30)}
+          help={summaryHelp.missingScanDays}
+          tone={summary.missingLiveScanDays30 === 0 ? 'accent' : 'warning'}
+        />
         <MetricCard
           label="Latest signal date"
           value={summary.latestSignalDate ?? 'No runs yet'}
@@ -202,4 +254,12 @@ function formatCurrencyRange(low: number | null, high: number | null): string {
   }
 
   return `${formatCurrency(low)}–${formatCurrency(high)}`;
+}
+
+function labelizeHealthStatus(status: string): string {
+  if (status === 'no_data') {
+    return 'No live data';
+  }
+
+  return status.charAt(0).toUpperCase() + status.slice(1);
 }
