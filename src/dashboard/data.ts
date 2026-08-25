@@ -1,6 +1,7 @@
 import { pool } from '../db/pool';
 import { assessOpportunityQuality } from '../opportunities/quality';
 import type { LatestListingDebug, ListingDebugEntry, ListingDebugGroup } from '../types';
+import { percentChange } from '../utils/math';
 
 export interface DashboardFilters {
   game?: string;
@@ -38,6 +39,7 @@ export interface OpportunityRow {
   activeAskLow: number | null;
   activeAskHigh: number | null;
   activeAskReference: number | null;
+  activeAskChangeVsPreviousPct: number | null;
   activeAskSellerCount: number;
   estimatedNetExit: number | null;
   maxBuyPrice: number | null;
@@ -203,6 +205,7 @@ export async function getLatestOpportunities(
     active_ask_low: string | null;
     active_ask_high: string | null;
     active_ask_reference: string | null;
+    previous_active_ask_reference: string | null;
     active_ask_seller_count: number;
     estimated_net_exit: string | null;
     max_buy_price: string | null;
@@ -241,6 +244,7 @@ export async function getLatestOpportunities(
         e.active_ask_low,
         e.active_ask_high,
         coalesce(e.active_ask_reference, s.active_ask_reference, s.market_now) as active_ask_reference,
+        previous_market.active_ask_reference as previous_active_ask_reference,
         coalesce(e.active_ask_seller_count, 0) as active_ask_seller_count,
         s.estimated_net_exit,
         s.max_buy_price,
@@ -266,6 +270,16 @@ export async function getLatestOpportunities(
       left join ebay_daily e
         on e.card_id = s.card_id
        and e.snapshot_date = s.signal_date
+      left join lateral (
+        select previous.active_ask_reference
+        from ebay_daily previous
+        where previous.card_id = s.card_id
+          and previous.snapshot_date < s.signal_date
+          and previous.snapshot_source = 'live'
+          and previous.active_ask_reference is not null
+        order by previous.snapshot_date desc
+        limit 1
+      ) previous_market on true
       where s.signal_date = $1
       ${where.clause ? `and ${where.clause.slice(6)}` : ''}
       order by s.rank_score desc, s.confidence_score desc, c.name asc
@@ -278,6 +292,10 @@ export async function getLatestOpportunities(
     const activeAskLow = toNullableNumber(row.active_ask_low);
     const activeAskHigh = toNullableNumber(row.active_ask_high);
     const activeAskReference = toNullableNumber(row.active_ask_reference);
+    const activeAskChangeVsPreviousPct = percentChange(
+      activeAskReference,
+      toNullableNumber(row.previous_active_ask_reference),
+    );
     const maxBuyPrice = toNullableNumber(row.max_buy_price);
     const confidenceScore = toNumberOrZero(row.confidence_score);
     const quality = assessOpportunityQuality({
@@ -286,6 +304,7 @@ export async function getLatestOpportunities(
       activeAskLow,
       activeAskHigh,
       activeAskReference,
+      activeAskChangeVsPreviousPct,
       maxBuyPrice,
     });
 
@@ -305,6 +324,7 @@ export async function getLatestOpportunities(
       activeAskLow,
       activeAskHigh,
       activeAskReference,
+      activeAskChangeVsPreviousPct,
       activeAskSellerCount: row.active_ask_seller_count,
       estimatedNetExit: toNullableNumber(row.estimated_net_exit),
       maxBuyPrice,

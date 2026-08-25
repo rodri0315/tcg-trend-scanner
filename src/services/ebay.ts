@@ -2,6 +2,7 @@ import axios from 'axios';
 
 import { config } from '../config';
 import { deriveMarketPriceMetrics, type PreparedListingSample } from './marketPricing';
+import { getListingIdentityRejectionReason, normalizeText } from './listingIdentity';
 import type { Card, EbaySnapshot } from '../types';
 import { median, round, toNumber } from '../utils/math';
 
@@ -629,9 +630,6 @@ function getDetailGradeRejectionReason(card: Card, detail: EbayItemDetail): stri
 
 function getListingRejectionReason(card: Card, item: EbayItemSummary): string | null {
   const normalizedTitle = normalizeText(item.title);
-  if (!normalizedTitle) {
-    return 'missing_title';
-  }
 
   const structuredGradeReason = getStructuredGradeRejectionReason(card, item);
   if (structuredGradeReason) {
@@ -642,8 +640,9 @@ function getListingRejectionReason(card: Card, item: EbayItemSummary): string | 
     return 'accessory_or_non_card_match';
   }
 
-  if (!matchesTrackedCardIdentity(card, normalizedTitle)) {
-    return 'missing_card_identity_terms';
+  const identityReason = getListingIdentityRejectionReason(card, item.title);
+  if (identityReason) {
+    return identityReason;
   }
 
   const conditionReason = getConditionRejectionReason(card, item, normalizedTitle);
@@ -662,32 +661,8 @@ function getListingRejectionReason(card: Card, item: EbayItemSummary): string | 
   return null;
 }
 
-function normalizeText(value: string | undefined): string {
-  return (value ?? '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
 function containsBlockedAccessoryTerm(title: string): boolean {
   return BLOCKED_ACCESSORY_PATTERNS.some((pattern) => pattern.test(title));
-}
-
-function matchesTrackedCardIdentity(card: Card, title: string): boolean {
-  const numberToken = normalizeText(card.cardNumber);
-  if (numberToken && title.includes(numberToken)) {
-    return true;
-  }
-
-  const nameTokens = extractNameTokens(card.name);
-  return nameTokens.some((token) => title.includes(token));
-}
-
-function extractNameTokens(name: string): string[] {
-  return normalizeText(name)
-    .split(' ')
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 3 && !GENERIC_NAME_TOKENS.has(token));
 }
 
 function containsGradedTerm(title: string): boolean {
@@ -946,9 +921,15 @@ const BLOCKED_ACCESSORY_PATTERNS = [
   /\breprint\b/,
   /\breplica\b/,
   /\bproxy\b/,
-  /\bproxy\b/,
   /\bcustom\b/,
   /\bcust0m\b/,
+  /\blot of\b/,
+  /\bcard lot\b/,
+  /\bbundle\b/,
+  /\bplayset\b/,
+  /\bset of \d+\b/,
+  /\b\d+\s*x\b/,
+  /\bx\s*\d+\b/,
 ];
 
 const GRADED_PATTERNS = [/\bpsa\b/, /\bbgs\b/, /\bcgc\b/, /\bsgc\b/, /\bbeckett\b/, /\bgraded\b/, /\bslab\b/];
@@ -997,7 +978,5 @@ const DAMAGED_PATTERNS = [
   /\btear\b/,
   /\btorn\b/,
 ];
-
-const GENERIC_NAME_TOKENS = new Set(['pokemon', 'one', 'piece', 'tcg', 'card']);
 
 const DETAIL_VALIDATION_LIMIT = 5;

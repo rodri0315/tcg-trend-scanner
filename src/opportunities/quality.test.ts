@@ -11,6 +11,7 @@ test('accepts an executable opportunity with sufficient evidence', () => {
       activeAskLow: 100,
       activeAskHigh: 108,
       activeAskReference: 104,
+      activeAskChangeVsPreviousPct: 2,
       maxBuyPrice: 82,
     }),
     { isActionable: true, reviewReasons: [] },
@@ -24,6 +25,7 @@ test('quarantines thin, low-confidence, or excessively wide markets', () => {
     activeAskLow: 100,
     activeAskHigh: 150,
     activeAskReference: 125,
+    activeAskChangeVsPreviousPct: 60,
     maxBuyPrice: 90,
   });
 
@@ -32,6 +34,7 @@ test('quarantines thin, low-confidence, or excessively wide markets', () => {
     'Confidence below 65',
     'Fewer than 3 credible BIN listings',
     'Ask range wider than 25%',
+    'Ask reference moved more than 50% since the previous scan',
   ]);
 });
 
@@ -42,6 +45,7 @@ test('quarantines missing ask and exit economics', () => {
     activeAskLow: null,
     activeAskHigh: null,
     activeAskReference: null,
+    activeAskChangeVsPreviousPct: null,
     maxBuyPrice: null,
   });
 

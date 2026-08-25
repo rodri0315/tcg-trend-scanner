@@ -89,6 +89,14 @@ Run the full daily job:
 npm run daily
 ```
 
+Audit the latest stored listing titles against the current identity rules without changing data:
+
+```bash
+npm run audit:listings
+```
+
+Listings must contain both the tracked card number and character identity. Explicitly conflicting languages, non-single lots, and variant mismatches for collision-prone variants such as Signature, Manga, Master Ball, and Parallel are rejected before pricing.
+
 Optional backfill date:
 
 ```bash
