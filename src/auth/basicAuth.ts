@@ -42,6 +42,14 @@ export function isAuthorizedBasicHeader(
   return secureEqual(username, expected.username) && secureEqual(password, expected.password);
 }
 
+export function isAuthorizedBearerHeader(authorizationHeader: string | null, expectedSecret: string | undefined): boolean {
+  if (!expectedSecret || !authorizationHeader?.startsWith('Bearer ')) {
+    return false;
+  }
+
+  return secureEqual(authorizationHeader.slice('Bearer '.length), expectedSecret);
+}
+
 function secureEqual(left: string, right: string): boolean {
   const leftHash = createHash('sha256').update(left).digest();
   const rightHash = createHash('sha256').update(right).digest();

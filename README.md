@@ -45,6 +45,7 @@ Apply [`migrations/005_snapshot_source.sql`](/Users/jorgerodriguez/jr/TCG/pokemo
 Apply [`migrations/006_card_condition.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/006_card_condition.sql) to add tracked card condition lanes like `near_mint_or_better` and `graded`.
 Apply [`migrations/007_economic_decision_support.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/007_economic_decision_support.sql) to add explicit active-ask ranges, expert popularity tiers, liquidity fields, and auditable net-exit/max-buy scenarios.
 Apply [`migrations/008_internal_security.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/008_internal_security.sql) to enable RLS and remove Supabase Data API access from the internal application tables.
+Apply [`migrations/009_scan_runs.sql`](/Users/jorgerodriguez/jr/TCG/pokemon-trend-scanner/migrations/009_scan_runs.sql) to store scheduled and CLI scan outcomes for operational auditing.
 
 ## Exit scenarios
 
@@ -128,6 +129,17 @@ APP_ACCESS_PASSWORD=<long unique password>
 ```
 
 Production fails closed with a `503` if the password is missing. Local development remains open when the password is unset. The eBay Marketplace Account Deletion webhook is intentionally excluded from dashboard authentication.
+
+## Scheduled live scan
+
+Vercel invokes `/api/cron/daily-scan` once per day at 14:00 UTC. Set a unique, sensitive `CRON_SECRET` in the Vercel Production environment; Vercel sends it as a Bearer token and the endpoint fails closed when it is absent or incorrect.
+
+The scheduled function:
+- uses the New York calendar date for market snapshots
+- prevents overlapping runs with a PostgreSQL advisory lock
+- skips a date that already has complete live coverage
+- records success or failure in `scan_runs`
+- does not write CSV or Markdown files to ephemeral serverless storage
 
 Run the dashboard locally:
 

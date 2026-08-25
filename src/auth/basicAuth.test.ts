@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { isAuthorizedBasicHeader, readInternalCredentials } from './basicAuth';
+import { isAuthorizedBasicHeader, isAuthorizedBearerHeader, readInternalCredentials } from './basicAuth';
 
 test('reads a configured single-user credential pair', () => {
   assert.deepEqual(
@@ -26,4 +26,11 @@ test('authorizes only an exact basic credential match', () => {
   assert.equal(isAuthorizedBasicHeader(valid, expected), true);
   assert.equal(isAuthorizedBasicHeader(invalid, expected), false);
   assert.equal(isAuthorizedBasicHeader(null, expected), false);
+});
+
+test('authorizes only an exact configured bearer secret', () => {
+  assert.equal(isAuthorizedBearerHeader('Bearer cron-secret', 'cron-secret'), true);
+  assert.equal(isAuthorizedBearerHeader('Bearer wrong-secret', 'cron-secret'), false);
+  assert.equal(isAuthorizedBearerHeader('Basic cron-secret', 'cron-secret'), false);
+  assert.equal(isAuthorizedBearerHeader('Bearer cron-secret', undefined), false);
 });

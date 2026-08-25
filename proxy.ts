@@ -31,5 +31,5 @@ export function proxy(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: ['/((?!api/ebay/marketplace-account-deletion|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!api/cron/daily-scan|api/ebay/marketplace-account-deletion|_next/static|_next/image|favicon.ico).*)'],
 };
