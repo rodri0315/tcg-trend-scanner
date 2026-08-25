@@ -166,7 +166,8 @@ The dashboard includes:
 - actionable opportunities ordered by confidence-adjusted `rank_score`
 - a review queue for low-confidence, thin, wide-range, or non-executable signals
 - watchlist page for tracked cards
-- card detail pages with recent history
+- editable card detail pages with query-health review and recent history
+- local-price evaluator and per-card decision journal with frozen exit-economics evidence
 
 ## eBay production keyset compliance
 The app includes a minimal Marketplace Account Deletion webhook at:

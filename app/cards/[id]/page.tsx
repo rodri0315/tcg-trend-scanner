@@ -2,28 +2,40 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { DashboardShell } from '../../../components/dashboard-shell';
+import { LocalPriceEvaluator } from '../../../components/local-price-evaluator';
 import { MobileTimelineTable } from '../../../components/mobile-timeline-table';
 import { QueryActions } from '../../../components/query-actions';
 import { Sparkline } from '../../../components/sparkline';
 import { getCardDetail } from '../../../src/dashboard/data';
+import { getDecisionJournal, getLatestDecisionContext } from '../../../src/services/decisions';
+import { createDecisionAction } from './decisions/actions';
 
 export const dynamic = 'force-dynamic';
 
 interface CardDetailPageProps {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function CardDetailPage({ params }: CardDetailPageProps) {
+export default async function CardDetailPage({ params, searchParams }: CardDetailPageProps) {
   const resolvedParams = await params;
   const cardId = Number(resolvedParams.id);
   if (!Number.isInteger(cardId)) {
     notFound();
   }
 
-  const card = await getCardDetail(cardId);
+  const [card, decisionContext, decisionJournal] = await Promise.all([
+    getCardDetail(cardId),
+    getLatestDecisionContext(cardId),
+    getDecisionJournal(cardId),
+  ]);
   if (!card) {
     notFound();
   }
+
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const journalCreated = getSingleValue(resolvedSearchParams.journal) === 'created';
+  const decisionAction = createDecisionAction.bind(null, cardId);
 
   const activeAskSeries = card.history.map((point) => point.activeAskReference);
   const trendSeries = card.history.map((point) => point.trendScore);
@@ -122,6 +134,71 @@ export default async function CardDetailPage({ params }: CardDetailPageProps) {
         <Link href={`/cards/${card.id}/edit`} className="textLink">
           Review query settings
         </Link>
+      </section>
+
+      <section className="panel panel--purple section--narrow">
+        <div className="sectionHead">
+          <div>
+            <p className="eyebrow">Local-price evaluator</p>
+            <h3>Compare an offer, then record your judgment</h3>
+          </div>
+          {journalCreated ? <span className="pill">Journal entry saved</span> : null}
+        </div>
+        <LocalPriceEvaluator
+          action={decisionAction}
+          signalDate={decisionContext?.signalDate ?? null}
+          marketReference={decisionContext?.marketReference ?? null}
+          exitScenarios={decisionContext?.exitScenarios ?? {}}
+        />
+      </section>
+
+      <section className="panel section--narrow">
+        <div className="sectionHead">
+          <div>
+            <p className="eyebrow">Decision journal</p>
+            <h3>{decisionJournal.length === 0 ? 'No recorded decisions yet' : `${decisionJournal.length} recent decisions`}</h3>
+          </div>
+        </div>
+        {decisionJournal.length === 0 ? (
+          <p className="emptyState">Evaluate an offer above to start building a decision history for this card.</p>
+        ) : (
+          <div className="decisionJournalList">
+            {decisionJournal.map((entry) => (
+              <article key={entry.id} className="decisionJournalEntry">
+                <div className="decisionJournalHead">
+                  <div className="pillRow">
+                    <span className={`pill${entry.decision === 'pass' ? ' pill--hot' : ''}`}>{entry.decision}</span>
+                    <span className="pill">{labelizeValue(entry.sourceChannel)}</span>
+                    <span className="pill">exit: {labelizeValue(entry.intendedExitChannel)}</span>
+                  </div>
+                  <time dateTime={entry.decidedAt}>{formatDecisionDate(entry.decidedAt)}</time>
+                </div>
+                <dl className="queryHealthMetrics">
+                  <div>
+                    <dt>Offer</dt>
+                    <dd>{formatCurrency(entry.offerPrice)}</dd>
+                  </div>
+                  <div>
+                    <dt>Max buy</dt>
+                    <dd>{formatCurrency(entry.maxBuyPrice)}</dd>
+                  </div>
+                  <div>
+                    <dt>Room vs max</dt>
+                    <dd>{formatSignedCurrency(entry.marginToMaxBuy)}</dd>
+                  </div>
+                  <div>
+                    <dt>Projected ROI</dt>
+                    <dd>{entry.projectedNetRoiPct === null ? 'n/a' : `${entry.projectedNetRoiPct.toFixed(1)}%`}</dd>
+                  </div>
+                </dl>
+                <p className="subtle">
+                  Evidence {entry.signalDate ?? 'unavailable'} · market reference {formatCurrency(entry.marketReference)} · {labelizeValue(entry.evaluationStatus)}
+                </p>
+                {entry.notes ? <p>{entry.notes}</p> : null}
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="detailGrid section--narrow">
@@ -306,4 +383,32 @@ function formatCurrencyRange(low: number | null, high: number | null): string {
   }
 
   return `$${low.toFixed(2)}–$${high.toFixed(2)}`;
+}
+
+function formatCurrency(value: number | null): string {
+  return value === null ? 'n/a' : `$${value.toFixed(2)}`;
+}
+
+function formatSignedCurrency(value: number | null): string {
+  if (value === null) {
+    return 'n/a';
+  }
+
+  return `${value >= 0 ? '+' : '−'}$${Math.abs(value).toFixed(2)}`;
+}
+
+function formatDecisionDate(value: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'America/New_York',
+  }).format(new Date(value));
+}
+
+function labelizeValue(value: string): string {
+  return value.replace(/_/g, ' ');
+}
+
+function getSingleValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }

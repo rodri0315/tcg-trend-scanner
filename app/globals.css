@@ -746,6 +746,89 @@ a {
   font-size: 1.05rem;
 }
 
+.offerEvaluator,
+.decisionJournalList {
+  display: grid;
+  gap: 18px;
+}
+
+.offerFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.offerFormGrid label,
+.offerNotes {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.offerFormGrid input,
+.offerFormGrid select,
+.offerNotes textarea {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(4, 10, 19, 0.9);
+  padding: 12px 14px;
+  color: var(--ink);
+  font: inherit;
+}
+
+.offerNotes textarea {
+  resize: vertical;
+}
+
+.offerEvaluation {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  border: 1px solid rgba(58, 212, 188, 0.3);
+  border-radius: 18px;
+  background: rgba(58, 212, 188, 0.08);
+  padding: 14px;
+}
+
+.offerEvaluation--warning {
+  border-color: rgba(255, 200, 87, 0.35);
+  background: rgba(255, 200, 87, 0.08);
+}
+
+.offerEvaluation div {
+  display: grid;
+  gap: 4px;
+}
+
+.offerEvaluation span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.decisionJournalEntry {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--card-strong);
+  padding: 16px;
+}
+
+.decisionJournalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.decisionJournalHead time {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .queryActionButton {
   display: inline-flex;
   align-items: center;
@@ -1078,6 +1161,23 @@ a {
 
   .metricCard {
     padding: 20px;
+  }
+
+  .offerFormGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .offerFormGrid input,
+  .offerFormGrid select,
+  .offerNotes textarea {
+    min-height: 52px;
+    padding: 14px 16px;
+    font-size: 1rem;
+  }
+
+  .decisionJournalHead {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .heroPanel,
